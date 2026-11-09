@@ -1234,9 +1234,19 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     [...pending.entries()].sort((a, b) => b[0].length - a[0].length).forEach(([name, uid]) => { if (text.includes("@" + name)) { text = text.split("@" + name).join(`<@${uid}>`); mentions.push(uid); } });
     if (text.length > 4500) { $("cErr").textContent = "That reply is too long. Keep it under 4,000 characters."; return; }
     sending = true; $("cSend").disabled = true; $("cErr").textContent = "";
-    const { error } = await sb.from("comments").insert({ order_id: id, body: text, mentions });
-    if (error) $("cErr").textContent = dbMsg(error); else { $("cText").value = ""; pending.clear(); loadComments(); }
+    const { data: saved, error } = await sb.from("comments").insert({ order_id: id, body: text, mentions }).select("id").single();
+    if (error) $("cErr").textContent = dbMsg(error); else { $("cText").value = ""; pending.clear(); loadComments(); if (mentions.length && saved) notifyMentions(saved.id, mentions.length); }
     sending = false; $("cSend").disabled = false;
+  }
+  /* email everyone @mentioned in a reply (runs on Vercel: api/notify.js) */
+  async function notifyMentions(commentId, n) {
+    try {
+      const { data: { session } } = await sb.auth.getSession(); if (!session) return;
+      const r = await fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token }, body: JSON.stringify({ comment_id: commentId }) });
+      const out = await r.json().catch(() => ({}));
+      if (r.ok && out.sent) toast(`Emailed ${out.sent} tagged ${out.sent === 1 ? "person" : "people"}.`);
+      else if (!r.ok) toast("Reply posted, but the email to tagged people didn't go out.");
+    } catch (_) { toast("Reply posted, but the email to tagged people didn't go out."); }
   }
 
   /* ---------- add order ---------- */
