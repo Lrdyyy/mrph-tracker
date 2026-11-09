@@ -22,6 +22,7 @@
   --st-delivery-bg: #ece4fb; --st-delivery-fg: #5b33a6;
   --st-done-bg: #dcf3e4; --st-done-fg: #1d6b3c;
   --st-hold-bg: #e7eaef; --st-hold-fg: #4a5466;
+  --st-jo-bg: #d8f1f0; --st-jo-fg: #0e6463;
   --st-cancel-bg: #fbe1e3; --st-cancel-fg: #a01f2b;
   color-scheme: light;
 }
@@ -37,6 +38,7 @@
     --st-delivery-bg: #2c2148; --st-delivery-fg: #c3a8ff;
     --st-done-bg: #15382a; --st-done-fg: #7fdca3;
     --st-hold-bg: #2b313b; --st-hold-fg: #b4bdcc;
+    --st-jo-bg: #133a3a; --st-jo-fg: #7fd6d3;
     --st-cancel-bg: #45191f; --st-cancel-fg: #ff9aa2;
     color-scheme: dark;
   }
@@ -149,6 +151,11 @@ tbody tr:hover td { background: var(--hover); }
 .s-delivery { background: var(--st-delivery-bg); color: var(--st-delivery-fg); }
 .s-done { background: var(--st-done-bg); color: var(--st-done-fg); }
 .s-hold { background: var(--st-hold-bg); color: var(--st-hold-fg); }
+.s-jo { background: var(--st-jo-bg); color: var(--st-jo-fg); }
+select.pill { appearance: none; -webkit-appearance: none; border: 0; cursor: pointer; padding-right: 26px; font-family: inherit; background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position: calc(100% - 13px) 55%, calc(100% - 8px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
+select.pill:hover { filter: brightness(.96); }
+select.pill:disabled { opacity: .6; cursor: progress; }
+select.pill option { background: var(--bg); color: var(--ink); }
 .s-cancel { background: var(--st-cancel-bg); color: var(--st-cancel-fg); }
 .addrow { all: unset; cursor: pointer; display: block; padding: 10px 14px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); }
 .addrow:hover { background: var(--hover); color: var(--ink); }
@@ -272,7 +279,7 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
       <h1>Order Tracker</h1>
       <p>One place for the team's orders, invoices and job orders.</p>
       <ul>
-        <li><span>✓</span><span>Track every order from Pending to Delivered</span></li>
+        <li><span>✓</span><span>Track every order from Pending to Completed</span></li>
         <li><span>✓</span><span>Discuss each order in its own thread</span></li>
         <li><span>✓</span><span>Access is approved by the account owner</span></li>
       </ul>
@@ -514,9 +521,9 @@ const ALLOW_SIGNUP = false;
 
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
 
-  const STATUSES = ["Pending", "In Progress", "For Delivery", "Delivered", "On Hold", "Cancelled"];
-  const STATUS_CLASS = { "Pending": "s-pending", "In Progress": "s-progress", "For Delivery": "s-delivery", "Delivered": "s-done", "On Hold": "s-hold", "Cancelled": "s-cancel" };
-  const STATUS_DOT = { "Pending": "var(--st-pending-fg)", "In Progress": "var(--st-progress-fg)", "For Delivery": "var(--st-delivery-fg)", "Delivered": "var(--st-done-fg)", "On Hold": "var(--st-hold-fg)", "Cancelled": "var(--st-cancel-fg)" };
+  const STATUSES = ["Pending", "For Invoice Creation", "For JO Creation", "For Delivery", "Completed", "Cancelled"];
+  const STATUS_CLASS = { "Pending": "s-pending", "For Invoice Creation": "s-progress", "For JO Creation": "s-jo", "For Delivery": "s-delivery", "Completed": "s-done", "Cancelled": "s-cancel" };
+  const STATUS_DOT = { "Pending": "var(--st-pending-fg)", "For Invoice Creation": "var(--st-progress-fg)", "For JO Creation": "var(--st-jo-fg)", "For Delivery": "var(--st-delivery-fg)", "Completed": "var(--st-done-fg)", "Cancelled": "var(--st-cancel-fg)" };
   const ROLE_LABEL = { pending: "Waiting", viewer: "Viewer", editor: "Editor", admin: "Admin", disabled: "Removed" };
   const ACTIVE = ["viewer", "editor", "admin"];
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
@@ -744,9 +751,16 @@ const ALLOW_SIGNUP = false;
         h("td", null, h("div", { class: "namecell" }, o.assignee ? ini(o.assignee) : null, h("button", { class: "link", type: "button", onclick: open, text: o.name || "Untitled" }))),
         h("td", { class: "ordercell" }, h("button", { class: "link mono", type: "button", onclick: open, text: o.orderNo || "—" }), threadInd(o), h("span", { class: "items", text: firstLine(o.items) })),
         h("td", null, blankOr(o.invoiceNo, true)), h("td", null, blankOr(o.jobOrderNo, true)),
-        h("td", null, h("span", { class: "pill " + (STATUS_CLASS[o.status] || "s-hold"), text: o.status })),
+        h("td", null, statusCell(o)),
         h("td", null, o.remarks ? h("div", { class: "remarks", text: o.remarks }) : h("span", { class: "blank", text: "—" }))));
     }
+  }
+  function statusCell(o) {
+    if (!can.edit()) return h("span", { class: "pill " + (STATUS_CLASS[o.status] || "s-hold"), text: o.status });
+    const sel = h("select", { class: "pill " + (STATUS_CLASS[o.status] || "s-hold"), "aria-label": `Status of ${o.orderNo}` },
+      STATUSES.map((s) => h("option", { value: s, selected: o.status === s, text: s })));
+    sel.addEventListener("change", () => { sel.disabled = true; setStatus(o.id, sel.value); });
+    return sel;
   }
   let dragId = null;
   function paintBoard(list) {
