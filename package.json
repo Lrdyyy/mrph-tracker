@@ -1,0 +1,9 @@
+{
+  "name": "mrph-tracker",
+  "private": true,
+  "description": "MRPH order tracker — static site plus one Vercel function that emails @mentioned teammates",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "nodemailer": "^6.9.16"
+  }
+}
