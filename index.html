@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MRPH Order Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+/* Layout: sign-in card (brand panel + form) until approved; then chat-app shell: dark sidebar of views, list header, table or status board, item pop-up with fields beside its thread, add button bottom-right. */
+:root {
+  --side: #172636; --side-ink: #c9d3df; --side-hi: #ffffff; --side-active: #1f6fd1;
+  --bg: #ffffff; --panel: #f6f7f9; --ink: #1d1f24; --muted: #616670; --line: #e1e3e8;
+  --link: #1264c4; --go: #12775c; --go-ink: #ffffff; --hover: #f1f3f6;
+  --mention-bg: #fdf3cf; --mention-fg: #6b5000; --danger: #b4232f;
+  --font-body: "Lato", "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --shadow: 0 20px 56px rgba(16, 24, 40, .24), 0 2px 6px rgba(16, 24, 40, .12);
+  --st-pending-bg: #fdf1d6; --st-pending-fg: #865700;
+  --st-progress-bg: #e0eafc; --st-progress-fg: #1a4aa8;
+  --st-delivery-bg: #ece4fb; --st-delivery-fg: #5b33a6;
+  --st-done-bg: #dcf3e4; --st-done-fg: #1d6b3c;
+  --st-hold-bg: #e7eaef; --st-hold-fg: #4a5466;
+  --st-cancel-bg: #fbe1e3; --st-cancel-fg: #a01f2b;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --side: #0e1722; --side-ink: #a9b5c4; --side-hi: #ffffff; --side-active: #2f7ee0;
+    --bg: #1a1d21; --panel: #22262b; --ink: #e8eaed; --muted: #a0a6b0; --line: #343a42;
+    --link: #5fa3f5; --go: #1f9d7a; --go-ink: #ffffff; --hover: #262b31;
+    --mention-bg: #4a3d12; --mention-fg: #f6d77a; --danger: #ff7b85;
+    --shadow: 0 20px 56px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.4);
+    --st-pending-bg: #3a2e12; --st-pending-fg: #f5c661;
+    --st-progress-bg: #1c2d50; --st-progress-fg: #8fb3ff;
+    --st-delivery-bg: #2c2148; --st-delivery-fg: #c3a8ff;
+    --st-done-bg: #15382a; --st-done-fg: #7fdca3;
+    --st-hold-bg: #2b313b; --st-hold-fg: #b4bdcc;
+    --st-cancel-bg: #45191f; --st-cancel-fg: #ff9aa2;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.46 var(--font-body); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+[hidden] { display: none !important; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; }
+
+/* ---------- auth screens ---------- */
+.auth { min-height: 100%; display: grid; place-items: center; padding: 24px 16px; background: var(--side); }
+.authcard { width: min(880px, 100%); display: grid; grid-template-columns: 1fr 1fr; background: var(--bg); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+@media (max-width: 720px) { .authcard { grid-template-columns: 1fr; } .brandpane { display: none !important; } }
+.brandpane { background: linear-gradient(160deg, #1d3550, #12202f); color: #dfe7f0; padding: 36px 34px; display: flex; flex-direction: column; gap: 18px; }
+.brandpane .logo { display: flex; align-items: center; gap: 10px; }
+.brandpane .mk { width: 40px; height: 40px; border-radius: 9px; display: grid; place-items: center; background: #1f6fd1; color: #fff; font-weight: 900; letter-spacing: .03em; }
+.brandpane h1 { margin: 0; font-size: 26px; line-height: 1.2; font-weight: 900; color: #fff; text-wrap: balance; }
+.brandpane p { margin: 0; color: #b6c4d3; }
+.brandpane ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; font-size: 14px; }
+.brandpane li { display: flex; gap: 10px; }
+.brandpane li span:first-child { color: #7fdca3; font-weight: 900; }
+.brandpane .fine { margin-top: auto; font-size: 12px; color: #8ea0b4; }
+.formpane { padding: 34px; display: grid; align-content: start; gap: 16px; }
+.formpane h2 { margin: 0; font-size: 22px; font-weight: 900; }
+.formpane .lead { margin: -8px 0 0; color: var(--muted); font-size: 14px; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.tabs button { border: 0; background: transparent; padding: 8px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--hover); color: var(--ink); }
+.pw { position: relative; }
+.pw input { padding-right: 64px; }
+.pw button { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: var(--link); font-weight: 700; font-size: 13px; cursor: pointer; padding: 4px 6px; }
+.btn.block { width: 100%; justify-content: center; padding: 10px 14px; font-size: 15px; }
+.textlink { all: unset; cursor: pointer; color: var(--link); font-weight: 700; font-size: 14px; }
+.textlink:hover { text-decoration: underline; }
+.ok { color: var(--st-done-fg); font-size: 13px; }
+.statecard { width: min(480px, 100%); background: var(--bg); border-radius: 14px; box-shadow: var(--shadow); padding: 32px; display: grid; gap: 14px; text-align: center; }
+.statecard h2 { margin: 0; font-size: 21px; font-weight: 900; }
+.statecard p { margin: 0; color: var(--muted); }
+.statecard .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.statecard code { font-family: var(--font-mono); font-size: 13px; background: var(--panel); padding: 1px 6px; border-radius: 4px; }
+
+/* ---------- shell ---------- */
+.shell { display: grid; grid-template-columns: 248px 1fr; height: 100%; }
+.side { background: var(--side); color: var(--side-ink); display: flex; flex-direction: column; min-height: 0; }
+.ws { padding: 16px 16px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.ws b { display: block; color: var(--side-hi); font-size: 17px; font-weight: 900; }
+.ws span { font-size: 13px; }
+.nav { flex: 1; overflow-y: auto; padding: 10px 8px; display: grid; align-content: start; gap: 1px; }
+.navhead { padding: 14px 10px 4px; font-size: 12px; font-weight: 700; letter-spacing: .03em; opacity: .8; }
+.navbtn { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 9px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 15px; color: var(--side-ink); }
+.navbtn:hover { background: rgba(255,255,255,.07); }
+.navbtn:focus-visible { outline: 2px solid var(--side-active); }
+.navbtn[aria-current="true"] { background: var(--side-active); color: #fff; font-weight: 700; }
+.navbtn .lab { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.navbtn .n { font: 500 12px/1 var(--font-mono); opacity: .85; }
+.navbtn .badge { background: #e8912d; color: #1d1f24; border-radius: 999px; padding: 2px 7px; font: 700 11px/1 var(--font-body); }
+.navbtn .ic { width: 16px; text-align: center; font-size: 13px; }
+.navbtn .sd { width: 9px; height: 9px; border-radius: 3px; margin: 0 3.5px; }
+.me { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid rgba(255,255,255,.08); }
+.me .who { flex: 1; min-width: 0; line-height: 1.25; }
+.me .who b { display: block; color: var(--side-hi); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.me .who span { font-size: 12px; }
+.signout { all: unset; cursor: pointer; font-size: 12px; font-weight: 700; color: var(--side-ink); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,.18); }
+.signout:hover { background: rgba(255,255,255,.08); color: #fff; }
+
+.ini { display: inline-grid; place-items: center; flex: none; border-radius: 6px; color: #fff; font-weight: 900; font-size: 11px; width: 22px; height: 22px; }
+.ini.l { width: 32px; height: 32px; border-radius: 7px; font-size: 13px; }
+
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+.top h1 { margin: 0; font-size: 18px; font-weight: 900; }
+.top .count { color: var(--muted); font-size: 13px; }
+.top .grow { flex: 1; }
+.search { width: min(340px, 100%); padding: 7px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 6px 12px; cursor: pointer; font-size: 14px; font-weight: 700; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--hover); color: var(--ink); }
+.btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--bg); padding: 6px 13px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 14px; }
+.btn:hover { background: var(--hover); }
+.btn.go { background: var(--go); color: var(--go-ink); border-color: var(--go); }
+.btn.go:hover { filter: brightness(1.08); }
+.btn.danger { color: var(--danger); border-color: var(--danger); background: transparent; }
+.btn.danger.armed { background: var(--danger); color: #fff; }
+.btn[disabled] { opacity: .55; cursor: default; }
+
+.content { flex: 1; overflow: auto; padding: 16px 20px 110px; display: grid; align-content: start; gap: 12px; }
+.notice { padding: 9px 14px; border-radius: 8px; background: var(--panel); border-left: 4px solid var(--link); font-size: 14px; }
+.notice.warn { border-left-color: var(--st-pending-fg); }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; min-width: 880px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 13px; font-weight: 700; color: var(--muted); background: var(--panel); white-space: nowrap; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: var(--hover); }
+.link { all: unset; cursor: pointer; color: var(--link); font-weight: 700; }
+.link:hover { text-decoration: underline; }
+.link:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 2px; }
+.namecell { display: flex; align-items: center; gap: 8px; }
+.ordercell .items { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread-ind { margin-left: 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.remarks { max-width: 280px; color: var(--muted); font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.blank { color: var(--muted); }
+.pill { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.s-pending { background: var(--st-pending-bg); color: var(--st-pending-fg); }
+.s-progress { background: var(--st-progress-bg); color: var(--st-progress-fg); }
+.s-delivery { background: var(--st-delivery-bg); color: var(--st-delivery-fg); }
+.s-done { background: var(--st-done-bg); color: var(--st-done-fg); }
+.s-hold { background: var(--st-hold-bg); color: var(--st-hold-fg); }
+.s-cancel { background: var(--st-cancel-bg); color: var(--st-cancel-fg); }
+.addrow { all: unset; cursor: pointer; display: block; padding: 10px 14px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); }
+.addrow:hover { background: var(--hover); color: var(--ink); }
+
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(250px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+.col { background: var(--panel); border-radius: 10px; padding: 10px; display: grid; align-content: start; gap: 8px; min-height: 160px; border: 2px solid transparent; }
+.col.over { border-color: var(--link); }
+.colhead { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 4px; }
+.colhead .n { font: 500 12px/1 var(--font-mono); color: var(--muted); }
+.card { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 4px; cursor: pointer; }
+.card:hover { border-color: var(--link); }
+.card[draggable="true"] { cursor: grab; }
+.card.dragging { opacity: .5; }
+.card .t { font-weight: 700; overflow-wrap: anywhere; }
+.card .sub { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+.colempty { font-size: 13px; color: var(--muted); padding: 4px; }
+.empty { padding: 40px 20px; text-align: center; color: var(--muted); }
+.empty strong { display: block; color: var(--ink); font-size: 17px; font-weight: 900; margin-bottom: 4px; }
+
+.fab { position: fixed; right: max(20px, env(safe-area-inset-right)); bottom: max(20px, env(safe-area-inset-bottom)); z-index: 20; display: inline-flex; align-items: center; gap: 8px; padding: 13px 20px 13px 16px; border-radius: 999px; border: 0; background: var(--go); color: var(--go-ink); font-weight: 700; font-size: 15px; box-shadow: var(--shadow); cursor: pointer; }
+.fab svg { width: 20px; height: 20px; }
+
+.scrim { position: fixed; inset: 0; z-index: 30; background: rgba(10, 14, 22, .32); }
+.win { position: fixed; z-index: 40; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(540px, calc(100vw - 24px)); max-height: calc(100% - 24px); display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+.win.xl { width: min(920px, calc(100vw - 24px)); height: min(640px, calc(100% - 24px)); }
+.win.lg { width: min(640px, calc(100vw - 24px)); }
+.win-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px 11px 18px; border-bottom: 1px solid var(--line); cursor: move; user-select: none; touch-action: none; }
+.win-head h2 { margin: 0; font-size: 18px; font-weight: 900; overflow-wrap: anywhere; }
+.kicker { display: block; font: 500 12px/1.3 var(--font-mono); color: var(--muted); margin-bottom: 2px; }
+.x { all: unset; cursor: pointer; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; color: var(--muted); font-size: 22px; }
+.x:hover { background: var(--hover); color: var(--ink); }
+.win-body { padding: 16px 18px; overflow-y: auto; display: grid; gap: 14px; align-content: start; }
+.win-foot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; padding: 11px 18px; border-top: 1px solid var(--line); }
+.win-foot .right { display: flex; gap: 8px; margin-left: auto; }
+.split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.split > .pane { min-height: 0; display: flex; flex-direction: column; }
+.split > .pane + .pane { border-left: 1px solid var(--line); background: var(--panel); }
+@media (max-width: 760px) {
+  .win.xl { height: calc(100% - 24px); }
+  .split { grid-template-columns: 1fr; overflow-y: auto; }
+  .split > .pane + .pane { border-left: 0; border-top: 1px solid var(--line); min-height: 360px; }
+}
+.panehead { padding: 10px 16px; font-size: 13px; font-weight: 700; color: var(--muted); border-bottom: 1px solid var(--line); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+@media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
+.field { display: grid; gap: 4px; }
+.field.full { grid-column: 1 / -1; }
+.field label, .k { font-size: 13px; font-weight: 700; color: var(--muted); }
+.field input, .field select, .field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.field textarea { resize: vertical; min-height: 62px; }
+.field input:focus, .field select:focus, .field textarea:focus, .composer textarea:focus { border-color: var(--link); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--link) 22%, transparent); }
+.v { white-space: pre-wrap; overflow-wrap: anywhere; }
+.amount { font: 600 19px/1.2 var(--font-mono); }
+.err { color: var(--danger); font-size: 13px; min-height: 1em; }
+.meta { font-size: 13px; color: var(--muted); }
+.hist { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13px; }
+.hist li { display: flex; gap: 8px; color: var(--muted); }
+.hist time { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.hist b { color: var(--ink); }
+details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+
+.msgs { flex: 1; overflow-y: auto; padding: 10px 6px; display: grid; align-content: start; gap: 2px; }
+.msg { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 6px 10px; border-radius: 6px; }
+.msg:hover { background: var(--hover); }
+.msg .ini { width: 34px; height: 34px; border-radius: 7px; font-size: 13px; }
+.msg .hd { display: flex; align-items: baseline; gap: 8px; }
+.msg .hd b { font-size: 14.5px; }
+.msg .hd time { font-size: 12px; color: var(--muted); }
+.msg .bd { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; }
+.ment { background: var(--mention-bg); color: var(--mention-fg); border-radius: 4px; padding: 0 3px; font-weight: 700; }
+.nothread { padding: 18px 16px; color: var(--muted); font-size: 14px; }
+.composer { position: relative; padding: 10px 12px 12px; border-top: 1px solid var(--line); }
+.composer textarea { width: 100%; min-height: 64px; max-height: 160px; resize: vertical; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.composer .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.picker { position: absolute; left: 12px; right: 12px; bottom: calc(100% - 6px); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 4px; display: grid; gap: 1px; max-height: 220px; overflow-y: auto; }
+.picker button { all: unset; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+.picker button:hover, .picker button[aria-selected="true"] { background: var(--link); color: #fff; }
+
+.people { display: grid; }
+.person { display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--line); }
+.person:last-child { border-bottom: 0; }
+.person .nm { flex: 1; min-width: 0; line-height: 1.3; }
+.person .nm b, .person .nm span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person .nm span { font-size: 12.5px; color: var(--muted); }
+.person select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.role { display: inline-flex; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.role.admin { background: var(--go); color: var(--go-ink); border-color: transparent; }
+.rolehelp { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 14px; color: var(--muted); }
+.rolehelp b { color: var(--ink); }
+
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 60; padding: 10px 16px; border-radius: 8px; background: var(--ink); color: var(--bg); font-size: 14px; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
+
+@media (max-width: 760px) {
+  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .side { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .ws { border-bottom: 0; padding: 10px 14px; }
+  .nav { flex: 1 1 100%; order: 3; display: flex; overflow-x: auto; padding: 0 8px 8px; gap: 4px; }
+  .navhead { display: none; }
+  .navbtn { white-space: nowrap; flex: none; }
+  .me { border-top: 0; margin-left: auto; padding: 8px 14px; }
+  .top, .content { padding-left: 16px; padding-right: 16px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .win { animation: pop .14s ease-out; }
+  @keyframes pop { from { opacity: .4; } to { opacity: 1; } }
+}
+.pwrules { margin: -6px 0 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 12.5px; color: var(--muted); }
+.pwrules li.met { color: var(--st-done-fg); }
+.pwrules li::before { content: "○ "; }
+.pwrules li.met::before { content: "● "; }
+.statecard form { text-align: left; display: grid; gap: 12px; }
+</style>
+</head>
+<body>
+
+<!-- ===================== SIGN-IN ===================== -->
+<div class="auth" id="authView" hidden>
+  <div class="authcard">
+    <div class="brandpane">
+      <div class="logo"><span class="mk">MR</span><b style="color:#fff">MRPH</b></div>
+      <h1>Order Tracker</h1>
+      <p>One place for the team's orders, invoices and job orders.</p>
+      <ul>
+        <li><span>✓</span><span>Track every order from Pending to Delivered</span></li>
+        <li><span>✓</span><span>Discuss each order in its own thread</span></li>
+        <li><span>✓</span><span>Access is approved by the account owner</span></li>
+      </ul>
+      <p class="fine">Authorized team members only. Every change is logged to the account that made it.</p>
+    </div>
+    <div class="formpane">
+      <h2 id="authTitle">Sign in</h2>
+      <p class="lead" id="authLead">Use the email and password the tracker owner set up for you.</p>
+      <div class="tabs" role="tablist" aria-label="Sign in or create account" id="authTabs" hidden>
+        <button type="button" role="tab" id="tabIn" aria-selected="true">Sign in</button>
+        <button type="button" role="tab" id="tabUp" aria-selected="false">Create account</button>
+      </div>
+      <form id="authForm" novalidate style="display:grid;gap:14px">
+        <div class="field" id="nameField" hidden><label for="fName">Full name</label><input id="fName" autocomplete="name" placeholder="Juan Dela Cruz"></div>
+        <div class="field"><label for="fEmail">Email</label><input id="fEmail" type="email" autocomplete="username" placeholder="you@company.com"></div>
+        <div class="field">
+          <label for="fPass">Password</label>
+          <div class="pw"><input id="fPass" type="password" autocomplete="current-password" placeholder="••••••••"><button type="button" id="pwToggle" aria-label="Show password">Show</button></div>
+        </div>
+        <div class="err" id="authErr" role="alert"></div>
+        <button class="btn go block" type="submit" id="authSubmit">Sign in</button>
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <button class="textlink" type="button" id="forgot">Forgot password?</button>
+        </div>
+        <div class="ok" id="authOk" role="status"></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== STATE SCREENS ===================== -->
+<div class="auth" id="stateView" hidden>
+  <div class="statecard">
+    <h2 id="stTitle"></h2>
+    <p id="stText"></p>
+    <form id="pwForm" novalidate hidden>
+      <div class="field" id="pwNameField"><label for="pName">Your full name</label><input id="pName" autocomplete="name"></div>
+      <div class="field"><label for="pNew">New password</label><input id="pNew" type="password" autocomplete="new-password"></div>
+      <ul class="pwrules" id="pwRules">
+        <li data-r="len">At least 10 characters</li>
+        <li data-r="mix">Upper and lower case letters</li>
+        <li data-r="num">At least one number</li>
+      </ul>
+      <div class="field"><label for="pNew2">Type it again</label><input id="pNew2" type="password" autocomplete="new-password"></div>
+      <button class="btn go block" type="submit" id="pwSave">Save password</button>
+    </form>
+    <div class="row" id="stActions"></div>
+    <div class="err" id="stErr" role="alert"></div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div class="shell" id="appView" hidden>
+  <aside class="side" aria-label="Views">
+    <div class="ws"><b>MRPH</b><span>Order Tracker</span></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="me" id="me"></div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <div><h1 id="viewTitle">All orders</h1><span class="count" id="count">Loading orders…</span></div>
+      <span class="grow"></span>
+      <input class="search" id="q" type="search" placeholder="Search name, order, invoice, JO no." aria-label="Search orders">
+      <div class="seg" role="group" aria-label="Layout">
+        <button type="button" id="lyTable" aria-pressed="true">Table</button>
+        <button type="button" id="lyBoard" aria-pressed="false">Board</button>
+      </div>
+      <button class="btn" type="button" id="copyCsv" title="Copy the orders in this view as CSV for Excel or Sheets">Copy CSV</button>
+    </header>
+    <div class="content">
+      <div class="notice" id="roleNote" hidden></div>
+      <div class="notice warn" id="loadNote" hidden></div>
+      <div id="tableView">
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th scope="col">Name</th><th scope="col">Order</th><th scope="col">Invoice No.</th><th scope="col">Job Order No.</th><th scope="col">Status</th><th scope="col">Remarks</th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+          <div class="empty" id="empty" hidden></div>
+          <button class="addrow" type="button" id="addRow" hidden>+ Add order</button>
+        </div>
+      </div>
+      <div class="board" id="boardView" hidden></div>
+    </div>
+  </div>
+</div>
+
+<button class="fab" id="fab" type="button" hidden>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+  Add order
+</button>
+<div class="scrim" id="scrim" hidden></div>
+
+<section class="win xl" id="detailWin" role="dialog" aria-modal="true" aria-labelledby="dTitle" hidden>
+  <div class="win-head" data-drag>
+    <div><span class="kicker" id="dKicker"></span><h2 id="dTitle">Order</h2></div>
+    <button class="x" type="button" data-close aria-label="Close">×</button>
+  </div>
+  <div class="split">
+    <div class="pane"><div class="win-body" id="dBody" style="flex:1"></div><div class="win-foot" id="dFoot"></div></div>
+    <div class="pane">
+      <div class="panehead" id="tHead">Thread</div>
+      <div class="msgs" id="msgs"></div>
+      <div class="composer" id="composer">
+        <div class="picker" id="picker" role="listbox" hidden></div>
+        <label for="cText" style="position:absolute;left:-9999px">Reply</label>
+        <textarea id="cText" placeholder="Reply… type @ to mention a teammate"></textarea>
+        <div class="row"><span class="meta">Enter to send · Shift+Enter for a new line</span><button class="btn go" type="button" id="cSend">Send</button></div>
+        <div class="err" id="cErr" role="alert"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="win" id="addWin" role="dialog" aria-modal="true" aria-labelledby="aTitle" hidden>
+  <div class="win-head" data-drag>
+    <div><span class="kicker">New order</span><h2 id="aTitle">Add order</h2></div>
+    <button class="x" type="button" data-close aria-label="Close">×</button>
+  </div>
+  <form id="addForm" novalidate style="display:contents">
+    <div class="win-body">
+      <div class="field"><label for="aName">Name</label><input id="aName" autocomplete="off" placeholder="Customer or company name"></div>
+      <div class="field"><label for="aItems">Items</label><textarea id="aItems" placeholder="One item per line, e.g. 2 × CAT6 cable box"></textarea></div>
+      <div class="field"><label for="aAddress">Address</label><textarea id="aAddress" placeholder="Delivery or site address"></textarea></div>
+      <div class="field"><label for="aAmount">Amount (₱)</label><input id="aAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="err" id="aErr" role="alert"></div>
+    </div>
+    <div class="win-foot">
+      <span class="meta">The order number is assigned automatically.</span>
+      <div class="right"><button class="btn" type="button" data-close>Cancel</button><button class="btn go" type="submit" id="aSave">Add order</button></div>
+    </div>
+  </form>
+</section>
+
+<section class="win lg" id="iamWin" role="dialog" aria-modal="true" aria-labelledby="iTitle" hidden>
+  <div class="win-head" data-drag>
+    <div><span class="kicker">Owner only</span><h2 id="iTitle">Team access</h2></div>
+    <button class="x" type="button" data-close aria-label="Close">×</button>
+  </div>
+  <div class="win-body">
+    <ul class="rolehelp">
+      <li><b>Waiting</b>: has an account, can't see anything until you approve them.</li>
+      <li><b>Viewer</b>: sees every order and can comment in threads.</li>
+      <li><b>Editor</b>: also adds orders, edits fields, assigns people and moves cards.</li>
+      <li><b>Admin</b>: everything an Editor can do, plus deleting orders.</li>
+      <li><b>Removed</b>: account kept for history, all access blocked.</li>
+    </ul>
+    <div class="field"><label for="iFilter">Find a person</label><input id="iFilter" type="search" autocomplete="off" placeholder="Name or email"></div>
+    <div class="people" id="iPeople"></div>
+    <p class="meta" style="margin:0" id="iHow"></p>
+  </div>
+</section>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+/* ============================================================
+   SETUP: paste your Supabase project URL and anon/publishable key.
+   (Supabase dashboard → Project Settings → API / API Keys)
+   The anon key is meant to be public. Access is enforced by the
+   Row Level Security policies in schema.sql, not by this page.
+   ============================================================ */
+const SUPABASE_URL = "https://supabase.com/dashboard/project/nhpudstyikrrcqrnxhhy";
+const SUPABASE_ANON_KEY = "sb_publishable_zGeE0BEgPvPansDlp91iIg_pueLBy0S";
+// Must match the email in is_owner() in schema.sql (lowercase).
+const OWNER_EMAIL = "hrldworks@gmail.com";
+// Leave false unless you connect custom SMTP in Supabase (see SETUP.md).
+// false = you create accounts in the Supabase dashboard; no public sign-up.
+const ALLOW_SIGNUP = false;
+/* ============================================================ */
+
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const configured = !SUPABASE_URL.includes("PASTE_") && !SUPABASE_ANON_KEY.startsWith("PASTE_");
+  const APP_URL = location.origin + location.pathname;
+
+  function h(tag, attrs, ...kids) {
+    const el = document.createElement(tag);
+    if (attrs) for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === "class") el.className = v;
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else if (k === "text") el.textContent = v;
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat()) {
+      if (kid == null || kid === false) continue;
+      el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+    }
+    return el;
+  }
+  function showOnly(id) { for (const v of ["authView", "stateView", "appView"]) $(v).hidden = v !== id; if (id !== "appView") $("fab").hidden = true; }
+  function stateScreen(title, text, actions, withPwForm) {
+    $("stTitle").textContent = title; $("stText").textContent = text; $("stErr").textContent = "";
+    $("stActions").replaceChildren(...(actions || []));
+    $("pwForm").hidden = !withPwForm;
+    showOnly("stateView");
+  }
+  let toastTimer = 0;
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3400); }
+
+  /* ---------- sign-in form ---------- */
+  let mode = "in";
+  function setMode(m) {
+    mode = m;
+    $("authTabs").hidden = !ALLOW_SIGNUP;
+    $("tabIn").setAttribute("aria-selected", m === "in"); $("tabUp").setAttribute("aria-selected", m === "up");
+    $("nameField").hidden = m !== "up"; $("forgot").hidden = m !== "in";
+    $("authTitle").textContent = m === "in" ? "Sign in" : "Create account";
+    $("authLead").textContent = m === "up" ? "Create an account. The tracker owner approves it before you can see orders."
+      : ALLOW_SIGNUP ? "Use your MRPH tracker email and password." : "Use the email and password the tracker owner set up for you.";
+    $("authSubmit").textContent = m === "in" ? "Sign in" : "Create account";
+    $("fPass").autocomplete = m === "in" ? "current-password" : "new-password";
+    $("authErr").textContent = ""; $("authOk").textContent = "";
+  }
+  $("tabIn").addEventListener("click", () => setMode("in"));
+  $("tabUp").addEventListener("click", () => setMode("up"));
+  $("pwToggle").addEventListener("click", () => {
+    const p = $("fPass"); const show = p.type === "password"; p.type = show ? "text" : "password";
+    $("pwToggle").textContent = show ? "Hide" : "Show"; $("pwToggle").setAttribute("aria-label", show ? "Hide password" : "Show password");
+  });
+  setMode("in");
+
+  const pwChecks = { len: (p) => p.length >= 10, mix: (p) => /[a-z]/.test(p) && /[A-Z]/.test(p), num: (p) => /\d/.test(p) };
+  const pwOk = (p) => Object.values(pwChecks).every((f) => f(p));
+  $("pNew").addEventListener("input", () => { const p = $("pNew").value; $("pwRules").querySelectorAll("li").forEach((li) => li.classList.toggle("met", pwChecks[li.dataset.r](p))); });
+
+  if (!configured) {
+    showOnly("authView");
+    $("authErr").textContent = "Setup needed: paste your Supabase URL and key at the top of the script in index.html (see SETUP.md).";
+    $("authForm").addEventListener("submit", (e) => e.preventDefault());
+    return;
+  }
+  if (!window.supabase || !window.supabase.createClient) {
+    showOnly("authView"); $("authErr").textContent = "Couldn't load the sign-in library. Check your connection and reload."; return;
+  }
+
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+
+  const STATUSES = ["Pending", "In Progress", "For Delivery", "Delivered", "On Hold", "Cancelled"];
+  const STATUS_CLASS = { "Pending": "s-pending", "In Progress": "s-progress", "For Delivery": "s-delivery", "Delivered": "s-done", "On Hold": "s-hold", "Cancelled": "s-cancel" };
+  const STATUS_DOT = { "Pending": "var(--st-pending-fg)", "In Progress": "var(--st-progress-fg)", "For Delivery": "var(--st-delivery-fg)", "Delivered": "var(--st-done-fg)", "On Hold": "var(--st-hold-fg)", "Cancelled": "var(--st-cancel-fg)" };
+  const ROLE_LABEL = { pending: "Waiting", viewer: "Viewer", editor: "Editor", admin: "Admin", disabled: "Removed" };
+  const ACTIVE = ["viewer", "editor", "admin"];
+  const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
+  const dt = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  const dshort = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+  const S = { user: null, me: null, role: "none", isOwner: false, people: {}, orders: [], comments: [], history: [],
+    view: "all", layout: "table", q: "", openId: null, loaded: false, threadLoaded: false, recovery: false };
+  try { const l = localStorage.getItem("mrph.layout"); if (l === "board" || l === "table") S.layout = l; } catch (e) {}
+
+  /* ---------- errors ---------- */
+  const AUTH_ERR = [
+    [/invalid login credentials/i, "Wrong email or password."],
+    [/email not confirmed/i, "This email isn't confirmed yet. Open the confirmation link in your inbox, or ask the tracker owner."],
+    [/rate limit|too many|only request this/i, "Too many attempts. Wait a few minutes, then try again."],
+    [/already registered|already been registered/i, "An account already uses this email. Sign in instead."],
+    [/password should|weak/i, "Choose a stronger password."],
+    [/fetch|network/i, "Can't reach the server. Check your connection."],
+    [/signups not allowed|signup is disabled/i, "Sign-up is turned off. Ask the tracker owner to create your account."]
+  ];
+  const authMsg = (e) => { const m = String(e && e.message || ""); for (const [re, t] of AUTH_ERR) if (re.test(m)) return t; return m || "Something went wrong. Try again."; };
+  function dbMsg(e) {
+    if (!e) return "Couldn't save. Try again.";
+    const m = String(e.message || "");
+    if (e.code === "42501" || /row-level security|permission denied/i.test(m)) return "Refused: your role doesn't allow this. Ask the tracker owner.";
+    if (e.code === "P0001") return m;
+    if (e.code === "23514") return "One of the fields is too long or not allowed.";
+    if (/fetch|network/i.test(m)) return "You're offline. Reconnect and try again.";
+    return "Couldn't save: " + m;
+  }
+  const REFUSED = { message: "refused", code: "42501" };
+
+  /* ---------- auth actions ---------- */
+  $("authForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("fEmail").value.trim().toLowerCase(), pass = $("fPass").value, name = $("fName").value.trim();
+    const err = $("authErr"); err.textContent = ""; $("authOk").textContent = "";
+    if (!/^\S+@\S+\.\S+$/.test(email)) { err.textContent = "Enter a valid email address."; return; }
+    if (mode === "up") {
+      if (!name) { err.textContent = "Enter your full name."; return; }
+      if (!pwOk(pass)) { err.textContent = "Use 10+ characters with upper and lower case letters and a number."; return; }
+    } else if (!pass) { err.textContent = "Enter your password."; return; }
+    const btn = $("authSubmit"); btn.disabled = true; btn.textContent = mode === "in" ? "Signing in…" : "Creating account…";
+    try {
+      if (mode === "in") {
+        const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+        if (error) throw error;
+      } else {
+        const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { full_name: name, self_signup: true }, emailRedirectTo: APP_URL } });
+        if (error) throw error;
+        if (!data.session) { setMode("in"); $("authOk").textContent = "Account created. Open the confirmation link we emailed you, then sign in."; }
+      }
+    } catch (x) { err.textContent = authMsg(x); }
+    btn.disabled = false; btn.textContent = mode === "in" ? "Sign in" : "Create account";
+  });
+  $("forgot").addEventListener("click", async () => {
+    const email = $("fEmail").value.trim().toLowerCase();
+    $("authErr").textContent = ""; $("authOk").textContent = "";
+    if (!/^\S+@\S+\.\S+$/.test(email)) { $("authErr").textContent = "Type your email above first, then click Forgot password."; return; }
+    if (!ALLOW_SIGNUP) { $("authOk").textContent = "Ask the tracker owner to reset your password. You'll pick a new one the next time you sign in."; return; }
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: APP_URL });
+    if (error && /rate|fetch|network/i.test(error.message)) { $("authErr").textContent = authMsg(error); return; }
+    $("authOk").textContent = "If an account uses that email, a reset link is on its way. Check your inbox and spam folder.";
+  });
+  const signOutBtn = () => h("button", { class: "btn", type: "button", text: "Sign out", onclick: () => sb.auth.signOut() });
+
+  /* ---------- set password (first sign-in, reset link, or by choice) ---------- */
+  let pwContext = "first";
+  function showPwForm(context) {
+    pwContext = context;
+    $("pwForm").reset(); $("pwRules").querySelectorAll("li").forEach((li) => li.classList.remove("met"));
+    $("pwNameField").hidden = context !== "first";
+    if (context === "first") $("pName").value = S.me?.name || "";
+    const title = context === "first" ? "Welcome! Set your own password" : context === "recovery" ? "Choose a new password" : "Change your password";
+    const text = context === "first" ? "You're signed in with a temporary password. Replace it with one only you know, and check your name." : "Pick a password you don't use anywhere else.";
+    const actions = context === "change" ? [h("button", { class: "btn", type: "button", text: "Cancel", onclick: () => route() })] : [signOutBtn()];
+    stateScreen(title, text, actions, true);
+    setTimeout(() => (context === "first" ? $("pName") : $("pNew")).focus(), 30);
+  }
+  $("pwForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const p1 = $("pNew").value, p2 = $("pNew2").value, name = $("pName").value.trim(), err = $("stErr"); err.textContent = "";
+    if (pwContext === "first" && !name) { err.textContent = "Enter your full name."; return; }
+    if (!pwOk(p1)) { err.textContent = "Use 10+ characters with upper and lower case letters and a number."; return; }
+    if (p1 !== p2) { err.textContent = "The two passwords don't match."; return; }
+    const btn = $("pwSave"); btn.disabled = true; btn.textContent = "Saving…";
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    if (error) { err.textContent = /different from the old|same/i.test(error.message) ? "Choose a password different from the temporary one." : authMsg(error); btn.disabled = false; btn.textContent = "Save password"; return; }
+    const patch = { password_set: true }; if (pwContext === "first") patch.name = name.slice(0, 80);
+    const { error: e2 } = await sb.from("profiles").update(patch).eq("id", S.user.id);
+    btn.disabled = false; btn.textContent = "Save password";
+    if (e2) { err.textContent = dbMsg(e2); return; }
+    S.recovery = false; toast("Password saved.");
+    await loadMe(); route();
+  });
+
+  /* ---------- session + routing ---------- */
+  let booted = false;
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === "PASSWORD_RECOVERY") S.recovery = true;
+    if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") { S.user = session?.user || null; return; }
+    setTimeout(() => onSession(session), 0); // never await supabase calls inside this callback
+  });
+  let sessionSeq = 0;
+  async function onSession(session) {
+    const seq = ++sessionSeq;
+    const u = session?.user || null;
+    if (booted && u && S.user && u.id === S.user.id && S.role !== "none" && !S.recovery) return; // same user, already running
+    teardown(); S.user = u; booted = true;
+    if (!u) { setMode("in"); $("fPass").value = ""; showOnly("authView"); return; }
+    S.isOwner = (u.email || "").toLowerCase() === OWNER_EMAIL.toLowerCase();
+    stateScreen("Signing in…", "Checking your access.", []);
+    await loadMe(); if (seq !== sessionSeq) return;
+    if (!S.me && !S.isOwner) { stateScreen("Account not set up", "Your login exists but has no tracker profile. Ask the tracker owner to check schema.sql was run.", [signOutBtn()]); return; }
+    watchMe();
+    route();
+  }
+  async function loadMe() {
+    const [{ data: me }, { data: role, error }] = await Promise.all([
+      sb.from("profiles").select("*").eq("id", S.user.id).maybeSingle(),
+      sb.rpc("my_role")
+    ]);
+    S.me = me || null; S.role = error ? "none" : (role || "none");
+  }
+  function route() {
+    if (!S.user) return;
+    if (S.recovery) { showPwForm("recovery"); return; }
+    if (S.me && !S.me.password_set) { showPwForm("first"); return; }
+    const r = S.role;
+    if (r === "pending" || r === "none") { stopMain(); stateScreen("Waiting for approval", `Your account (${S.user.email}) is ready. The tracker owner needs to approve it before you can see orders. This page opens by itself once you're approved.`, [signOutBtn()]); return; }
+    if (!ACTIVE.includes(r)) { stopMain(); stateScreen("Access removed", "Your access to the MRPH Order Tracker has been removed. Contact the tracker owner if this is a mistake.", [signOutBtn()]); return; }
+    showOnly("appView");
+    if (!mainOn) startMain(); else paint();
+  }
+
+  /* ---------- live data ---------- */
+  let meChannel = null, mainChannel = null, threadChannel = null, mainOn = false;
+  function watchMe() {
+    meChannel = sb.channel("me-" + S.user.id)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${S.user.id}` }, async () => { await loadMe(); route(); })
+      .subscribe();
+  }
+  const timers = {};
+  const soon = (key, fn, ms) => { clearTimeout(timers[key]); timers[key] = setTimeout(fn, ms || 250); };
+  function norm(o) {
+    const ts = (v) => v ? Date.parse(v) : null;
+    return { id: o.id, orderNo: o.order_no, name: o.name, items: o.items, address: o.address, amount: o.amount == null ? null : Number(o.amount),
+      invoiceNo: o.invoice_no, jobOrderNo: o.job_order_no, status: o.status, remarks: o.remarks, assignee: o.assignee,
+      createdBy: o.created_by, createdAt: ts(o.created_at), updatedBy: o.updated_by, updatedAt: ts(o.updated_at),
+      commentCount: o.comment_count, lastCommentAt: ts(o.last_comment_at) };
+  }
+  async function loadOrders() {
+    const { data, error } = await sb.from("orders").select("*").order("created_at", { ascending: false }).limit(2000);
+    const note = $("loadNote");
+    if (error) { note.textContent = "Couldn't load orders. " + (/fetch|network/i.test(error.message) ? "Check your connection." : "Reload the page."); note.hidden = false; S.loaded = true; paint(); return; }
+    note.hidden = true; S.orders = (data || []).map(norm); S.loaded = true; paint();
+  }
+  async function loadPeople() {
+    const { data } = await sb.from("profiles").select("id,name,email,role");
+    const m = {}; (data || []).forEach((p) => m[p.id] = p); S.people = m; paint();
+  }
+  function startMain() {
+    mainOn = true; S.loaded = false; paint();
+    loadOrders(); loadPeople();
+    const slow = setTimeout(() => { if (!S.loaded) { $("loadNote").textContent = "Can't reach the order data yet. Check your connection; this page keeps trying."; $("loadNote").hidden = false; } }, 10000);
+    mainChannel = sb.channel("mrph-main")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => soon("orders", loadOrders))
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => soon("people", loadPeople))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "order_history" }, (p) => { if (S.openId && p.new && p.new.order_id === S.openId) soon("hist", loadHistory); })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") clearTimeout(slow);
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") { $("loadNote").textContent = "Live updates paused. Changes by others appear when you reload or return to this tab."; $("loadNote").hidden = false; }
+      });
+  }
+  function stopMain() { if (mainChannel) sb.removeChannel(mainChannel); mainChannel = null; mainOn = false; }
+  function teardown() { stopMain(); if (meChannel) sb.removeChannel(meChannel); meChannel = null; stopThread(); closeAllWins(); S.orders = []; S.people = {}; S.loaded = false; S.me = null; S.role = "none"; }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && mainOn) { loadOrders(); loadPeople(); if (S.openId) { loadComments(); loadHistory(); } } });
+
+  /* ---------- helpers ---------- */
+  const role = () => S.role;
+  const can = { add: () => ["editor", "admin"].includes(role()), edit: () => ["editor", "admin"].includes(role()), del: () => role() === "admin", comment: () => ACTIVE.includes(role()) };
+  function nameOf(uid) { if (!uid) return "Former member"; const p = S.people[uid]; return (p && p.name) || (uid === S.user?.id ? (S.me?.name || "You") : "Former member"); }
+  function colorOf(uid) { let x = 0; for (const c of String(uid || "")) x = (x * 31 + c.charCodeAt(0)) >>> 0; return `hsl(${x % 360} 52% 42%)`; }
+  function ini(uid, cls) {
+    const parts = nameOf(uid).trim().split(/\s+/);
+    const t = (parts[0]?.[0] || "?") + (parts.length > 1 ? parts[parts.length - 1][0] : "");
+    return h("span", { class: "ini" + (cls ? " " + cls : ""), style: `background:${uid ? colorOf(uid) : "var(--muted)"}`, "aria-hidden": "true", text: t.toUpperCase() });
+  }
+  const fmtTime = (ms) => ms ? dt.format(new Date(ms)) : "";
+  const fmtAmount = (n) => typeof n === "number" && isFinite(n) ? peso.format(n) : "—";
+  function firstLine(s) { const l = String(s || "").split(/\n+/).map((x) => x.trim()).filter(Boolean); return !l.length ? "" : l.length > 1 ? `${l[0]} +${l.length - 1} more` : l[0]; }
+  const activeIds = () => Object.values(S.people).filter((p) => ACTIVE.includes(p.role) || p.email === OWNER_EMAIL.toLowerCase()).map((p) => p.id);
+
+  /* ---------- views ---------- */
+  function inView(o) { if (S.view === "mine") return o.assignee === S.user.id; if (S.view.startsWith("st:")) return o.status === S.view.slice(3); return true; }
+  function filtered() { const q = S.q.trim().toLowerCase(); return S.orders.filter((o) => inView(o) && (!q || [o.name, o.orderNo, o.items, o.invoiceNo, o.jobOrderNo, o.remarks, o.address].some((v) => String(v || "").toLowerCase().includes(q)))); }
+  const viewTitle = () => S.view === "mine" ? "Assigned to me" : S.view.startsWith("st:") ? S.view.slice(3) : "All orders";
+
+  function paintNav() {
+    const nav = $("nav"); nav.replaceChildren();
+    const counts = {}; STATUSES.forEach((s) => counts[s] = 0); let mine = 0;
+    for (const o of S.orders) { if (counts[o.status] != null) counts[o.status]++; if (o.assignee === S.user.id) mine++; }
+    const btn = (v, icon, label, n) => h("button", { class: "navbtn", type: "button", "aria-current": S.view === v ? "true" : "false", onclick: () => { S.view = v; paint(); } }, icon, h("span", { class: "lab", text: label }), n != null ? h("span", { class: "n", text: String(n) }) : null);
+    nav.append(btn("all", h("span", { class: "ic", text: "▤" }), "All orders", S.orders.length), btn("mine", h("span", { class: "ic", text: "@" }), "Assigned to me", mine),
+      h("div", { class: "navhead", text: "Status" }), ...STATUSES.map((s) => btn("st:" + s, h("span", { class: "sd", style: `background:${STATUS_DOT[s]}` }), s, counts[s])));
+    if (S.isOwner) {
+      const waiting = Object.values(S.people).filter((p) => p.role === "pending" && p.email !== OWNER_EMAIL.toLowerCase()).length;
+      nav.append(h("div", { class: "navhead", text: "Admin" }), h("button", { class: "navbtn", type: "button", onclick: openIam }, h("span", { class: "ic", text: "⚿" }), h("span", { class: "lab", text: "Team access" }), waiting ? h("span", { class: "badge", text: `${waiting} waiting` }) : null));
+    }
+  }
+  function paintMe() {
+    const box = $("me"); box.replaceChildren();
+    box.append(ini(S.user.id, "l"), h("div", { class: "who" }, h("b", { text: nameOf(S.user.id) }), h("span", { text: S.isOwner ? "Owner · Admin" : ROLE_LABEL[role()] || "" })),
+      h("div", { style: "display:grid;gap:4px" },
+        h("button", { class: "signout", type: "button", text: "Password", onclick: () => { closeAllWins(); showPwForm("change"); } }),
+        h("button", { class: "signout", type: "button", text: "Sign out", onclick: () => sb.auth.signOut() })));
+  }
+  const blankOr = (v, mono) => v ? h("span", { class: mono ? "mono" : null, text: v }) : h("span", { class: "blank", text: "—" });
+  const threadInd = (o) => o.commentCount ? h("span", { class: "thread-ind", title: "Comments", text: "💬 " + o.commentCount }) : null;
+  function paintTable(list) {
+    const tb = $("rows"); tb.replaceChildren();
+    for (const o of list) {
+      const open = () => openDetail(o.id);
+      tb.append(h("tr", null,
+        h("td", null, h("div", { class: "namecell" }, o.assignee ? ini(o.assignee) : null, h("button", { class: "link", type: "button", onclick: open, text: o.name || "Untitled" }))),
+        h("td", { class: "ordercell" }, h("button", { class: "link mono", type: "button", onclick: open, text: o.orderNo || "—" }), threadInd(o), h("span", { class: "items", text: firstLine(o.items) })),
+        h("td", null, blankOr(o.invoiceNo, true)), h("td", null, blankOr(o.jobOrderNo, true)),
+        h("td", null, h("span", { class: "pill " + (STATUS_CLASS[o.status] || "s-hold"), text: o.status })),
+        h("td", null, o.remarks ? h("div", { class: "remarks", text: o.remarks }) : h("span", { class: "blank", text: "—" }))));
+    }
+  }
+  let dragId = null;
+  function paintBoard(list) {
+    const b = $("boardView"); b.replaceChildren();
+    const cols = S.view.startsWith("st:") ? [S.view.slice(3)] : STATUSES;
+    for (const s of cols) {
+      const items = list.filter((o) => o.status === s);
+      const col = h("div", { class: "col" }, h("div", { class: "colhead" }, h("span", { class: "pill " + STATUS_CLASS[s], text: s }), h("span", { class: "n", text: String(items.length) })));
+      if (!items.length) col.append(h("div", { class: "colempty", text: can.edit() ? "Drag an order here" : "Nothing here" }));
+      for (const o of items) {
+        const card = h("div", { class: "card", tabindex: "0", role: "button", "aria-label": `${o.name}, ${o.orderNo}`, draggable: can.edit() ? "true" : null, onclick: () => openDetail(o.id), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(o.id); } } },
+          h("span", { class: "t", text: o.name || "Untitled" }),
+          h("div", { class: "sub" }, h("span", { class: "mono", text: o.orderNo || "" }), h("span", { class: "mono", text: fmtAmount(o.amount) })),
+          (o.assignee || o.commentCount) ? h("div", { class: "sub" }, h("span", { style: "display:flex;align-items:center;gap:6px" }, o.assignee ? [ini(o.assignee), h("span", { text: nameOf(o.assignee) })] : null), o.commentCount ? h("span", { text: "💬 " + o.commentCount }) : null) : null);
+        card.addEventListener("dragstart", (e) => { dragId = o.id; card.classList.add("dragging"); try { e.dataTransfer.setData("text/plain", o.id); } catch (x) {} });
+        card.addEventListener("dragend", () => { dragId = null; card.classList.remove("dragging"); });
+        col.append(card);
+      }
+      col.addEventListener("dragover", (e) => { if (dragId) { e.preventDefault(); col.classList.add("over"); } });
+      col.addEventListener("dragleave", () => col.classList.remove("over"));
+      col.addEventListener("drop", (e) => { e.preventDefault(); col.classList.remove("over"); const id = dragId; dragId = null; if (id) setStatus(id, s); });
+      b.append(col);
+    }
+  }
+  async function updateOrder(id, patch) {
+    const { data, error } = await sb.from("orders").update(patch).eq("id", id).select("id");
+    if (error) throw error; if (!data || !data.length) throw REFUSED;
+  }
+  async function setStatus(id, s) {
+    const o = S.orders.find((x) => x.id === id); if (!o || o.status === s || !can.edit()) return;
+    const prev = o.status; o.status = s; paint();
+    try { await updateOrder(id, { status: s }); toast(`${o.orderNo} moved to ${s}`); } catch (e) { o.status = prev; paint(); toast(dbMsg(e)); }
+  }
+  function paint() {
+    if (!S.user || $("appView").hidden) return;
+    paintNav(); paintMe();
+    const n = $("roleNote");
+    if (S.loaded && role() === "viewer") { n.textContent = "You can view orders and comment in threads. Ask the tracker owner to make you an Editor to add or change orders."; n.hidden = false; } else n.hidden = true;
+    $("viewTitle").textContent = viewTitle();
+    const list = filtered(); const inViewCount = S.orders.filter(inView).length;
+    $("count").textContent = !S.loaded ? "Loading orders…" : S.q.trim() ? `${list.length} of ${inViewCount} orders match` : `${inViewCount} order${inViewCount === 1 ? "" : "s"}`;
+    $("lyTable").setAttribute("aria-pressed", S.layout === "table"); $("lyBoard").setAttribute("aria-pressed", S.layout === "board");
+    $("tableView").hidden = S.layout !== "table"; $("boardView").hidden = S.layout !== "board";
+    if (S.layout === "table") {
+      paintTable(list);
+      const empty = $("empty");
+      if (S.loaded && !list.length) {
+        empty.replaceChildren(h("strong", { text: S.q.trim() ? "No orders match" : S.view === "mine" ? "Nothing assigned to you" : S.orders.length ? "No orders in this view" : "No orders yet" }),
+          h("span", { text: S.q.trim() ? "Clear the search or pick another view." : S.view === "mine" ? "Orders an Editor assigns to you show up here." : can.add() ? "Use Add order at the bottom right to log one." : "Orders appear here as soon as an Editor adds them." }));
+        empty.hidden = false;
+      } else empty.hidden = true;
+      $("addRow").hidden = !(S.loaded && can.add());
+    } else paintBoard(list);
+    $("fab").hidden = !(S.loaded && can.add());
+    if (S.openId && !$("detailWin").hidden) { if (!detailDirty()) paintDetail(); paintThread(); }
+    if (!$("iamWin").hidden) paintPeople();
+  }
+  function setLayout(l) { S.layout = l; try { localStorage.setItem("mrph.layout", l); } catch (e) {} paint(); }
+  $("lyTable").addEventListener("click", () => setLayout("table"));
+  $("lyBoard").addEventListener("click", () => setLayout("board"));
+  $("q").addEventListener("input", (e) => { S.q = e.target.value; paint(); });
+  $("copyCsv").addEventListener("click", async () => {
+    const cols = [["Name", "name"], ["Order No.", "orderNo"], ["Items", "items"], ["Address", "address"], ["Amount", "amount"], ["Invoice No.", "invoiceNo"], ["Job Order No.", "jobOrderNo"], ["Status", "status"], ["Assignee", "assignee"], ["Remarks", "remarks"], ["Created", "createdAt"]];
+    const esc = (v) => { let s = String(v ?? ""); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const val = (o, k) => k === "assignee" ? (o.assignee ? nameOf(o.assignee) : "") : k === "createdAt" ? new Date(o.createdAt).toISOString() : o[k];
+    const rows = [cols.map((c) => c[0]).join(",")].concat(filtered().map((o) => cols.map(([, k]) => esc(val(o, k))).join(",")));
+    try { await navigator.clipboard.writeText(rows.join("\n")); toast(`Copied ${rows.length - 1} orders. Paste into Excel or Google Sheets.`); } catch (e) { toast("Your browser blocked copying. Try again."); }
+  });
+
+  /* ---------- floating windows ---------- */
+  const stack = [];
+  function openWin(win) { win.style.left = ""; win.style.top = ""; win.style.transform = ""; win.hidden = false; $("scrim").hidden = false; if (!stack.includes(win)) stack.push(win); }
+  function closeWin(win) { win.hidden = true; const i = stack.indexOf(win); if (i >= 0) stack.splice(i, 1); if (!stack.length) $("scrim").hidden = true; if (win.id === "detailWin") { S.openId = null; stopThread(); } }
+  function closeAllWins() { [...stack].forEach(closeWin); }
+  document.addEventListener("click", (e) => { const c = e.target.closest("[data-close]"); if (c) closeWin(c.closest(".win")); });
+  $("scrim").addEventListener("click", () => { const t = stack[stack.length - 1]; if (t) closeWin(t); });
+  document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; if (!$("picker").hidden) { $("picker").hidden = true; return; } if (stack.length) closeWin(stack[stack.length - 1]); });
+  document.querySelectorAll("[data-drag]").forEach((head) => {
+    head.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button")) return;
+      const win = head.closest(".win"); const r = win.getBoundingClientRect();
+      win.style.transform = "none"; win.style.left = r.left + "px"; win.style.top = r.top + "px";
+      const dx = e.clientX - r.left, dy = e.clientY - r.top; head.setPointerCapture(e.pointerId);
+      const move = (ev) => { win.style.left = Math.min(Math.max(ev.clientX - dx, 80 - r.width), window.innerWidth - 80) + "px"; win.style.top = Math.min(Math.max(ev.clientY - dy, 8), window.innerHeight - 48) + "px"; };
+      const up = () => { head.removeEventListener("pointermove", move); head.removeEventListener("pointerup", up); head.removeEventListener("pointercancel", up); };
+      head.addEventListener("pointermove", move); head.addEventListener("pointerup", up); head.addEventListener("pointercancel", up);
+    });
+  });
+
+  /* ---------- order details ---------- */
+  const EDIT_FIELDS = [["name", "Name"], ["status", "Status"], ["assignee", "Assignee"], ["amount", "Amount"], ["invoiceNo", "Invoice No."], ["jobOrderNo", "Job Order No."], ["items", "Items"], ["address", "Address"], ["remarks", "Remarks"]];
+  let snapshotVals = null;
+  function openDetail(id) { S.openId = id; snapshotVals = null; S.comments = []; S.history = []; paintDetail(); openWin($("detailWin")); startThread(id); loadHistory(); }
+  async function loadHistory() {
+    const id = S.openId; if (!id) return;
+    const { data } = await sb.from("order_history").select("actor,summary,created_at").eq("order_id", id).order("created_at", { ascending: false }).limit(50);
+    if (S.openId !== id) return; S.history = data || []; if (!detailDirty()) paintDetail();
+  }
+  function readForm() { const f = $("dBody").querySelector("[data-form]"); if (!f) return null; const o = {}; for (const [k] of EDIT_FIELDS) { const el = f.querySelector(`[name="${k}"]`); if (el) o[k] = el.value; } return o; }
+  function detailDirty() { if (!snapshotVals) return false; const v = readForm(); return !!v && Object.keys(v).some((k) => String(v[k]) !== String(snapshotVals[k])); }
+  function paintDetail() {
+    const o = S.orders.find((x) => x.id === S.openId); const body = $("dBody"), foot = $("dFoot");
+    body.replaceChildren(); foot.replaceChildren();
+    if (!o) { $("dKicker").textContent = ""; $("dTitle").textContent = "Order removed"; body.append(h("p", { class: "meta", text: "Someone deleted this order." })); foot.append(h("div", { class: "right" }, h("button", { class: "btn", type: "button", "data-close": true, text: "Close" }))); return; }
+    $("dKicker").textContent = o.orderNo || ""; $("dTitle").textContent = o.name || "Untitled";
+    if (can.edit()) {
+      const val = (k) => k === "amount" ? (typeof o.amount === "number" ? String(o.amount) : "") : (o[k] || "");
+      snapshotVals = {}; for (const [k] of EDIT_FIELDS) snapshotVals[k] = val(k);
+      const field = (k, label, el, full) => h("div", { class: "field" + (full ? " full" : "") }, h("label", { for: "d_" + k, text: label }), el);
+      const inp = (k, extra) => h("input", Object.assign({ id: "d_" + k, name: k, value: val(k), autocomplete: "off" }, extra || {}));
+      const ta = (k) => { const t = h("textarea", { id: "d_" + k, name: k }); t.value = val(k); return t; };
+      const people = activeIds().sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+      if (o.assignee && !people.includes(o.assignee)) people.push(o.assignee);
+      body.append(h("div", { class: "grid2", "data-form": true },
+        field("name", "Name", inp("name", { maxlength: "200" }), true),
+        field("status", "Status", h("select", { id: "d_status", name: "status" }, STATUSES.map((s) => h("option", { value: s, selected: val("status") === s, text: s })))),
+        field("assignee", "Assignee", h("select", { id: "d_assignee", name: "assignee" }, h("option", { value: "", text: "Unassigned" }), people.map((id) => h("option", { value: id, selected: val("assignee") === id, text: id === S.user.id ? `${nameOf(id)} (you)` : nameOf(id) })))),
+        field("amount", "Amount (₱)", inp("amount", { type: "number", min: "0", step: "0.01", inputmode: "decimal" })),
+        field("invoiceNo", "Invoice No.", inp("invoiceNo", { class: "mono", placeholder: "e.g. INV-0457", maxlength: "80" })),
+        field("jobOrderNo", "Job Order No.", inp("jobOrderNo", { class: "mono", placeholder: "e.g. JO-2611-021", maxlength: "80" }), true),
+        field("items", "Items", ta("items"), true), field("address", "Address", ta("address"), true), field("remarks", "Remarks", ta("remarks"), true)));
+    } else {
+      snapshotVals = null;
+      const ro = (label, node, full) => h("div", { class: "field" + (full ? " full" : "") }, h("span", { class: "k", text: label }), node);
+      const txt = (v, mono) => v ? h("div", { class: "v" + (mono ? " mono" : ""), text: v }) : h("div", { class: "blank", text: "—" });
+      body.append(h("div", { class: "grid2" },
+        ro("Status", h("div", null, h("span", { class: "pill " + (STATUS_CLASS[o.status] || "s-hold"), text: o.status }))),
+        ro("Amount", h("div", { class: "amount", text: fmtAmount(o.amount) })),
+        ro("Assignee", o.assignee ? h("div", { class: "namecell" }, ini(o.assignee), h("span", { text: nameOf(o.assignee) })) : txt("")),
+        ro("Invoice No.", txt(o.invoiceNo, true)), ro("Job Order No.", txt(o.jobOrderNo, true), true),
+        ro("Items", txt(o.items), true), ro("Address", txt(o.address), true), ro("Remarks", txt(o.remarks), true)));
+    }
+    body.append(h("div", { class: "meta" }, `Added by ${nameOf(o.createdBy)} · ${fmtTime(o.createdAt)}`, o.updatedAt && o.updatedAt !== o.createdAt ? [h("br"), `Last updated by ${nameOf(o.updatedBy)} · ${fmtTime(o.updatedAt)}`] : null));
+    if (S.history.length) body.append(h("details", null, h("summary", { text: `Change history (${S.history.length})` }), h("ul", { class: "hist" }, S.history.map((x) => h("li", null, h("time", { text: fmtTime(Date.parse(x.created_at)) }), h("span", null, h("b", { text: nameOf(x.actor) }), " " + x.summary))))));
+    const err = h("div", { class: "err", role: "alert" }); body.append(err);
+    if (can.del()) {
+      let armed = false; const del = h("button", { class: "btn danger", type: "button", text: "Delete order" });
+      del.addEventListener("click", async () => {
+        if (!armed) { armed = true; del.classList.add("armed"); del.textContent = "Click again to delete"; setTimeout(() => { armed = false; del.classList.remove("armed"); del.textContent = "Delete order"; }, 4000); return; }
+        del.disabled = true;
+        const { data, error } = await sb.from("orders").delete().eq("id", o.id).select("id");
+        if (error || !data || !data.length) { err.textContent = dbMsg(error || REFUSED); del.disabled = false; return; }
+        closeWin($("detailWin")); toast(`Deleted ${o.orderNo}`); loadOrders();
+      });
+      foot.append(del);
+    }
+    const right = h("div", { class: "right" });
+    if (can.edit()) {
+      right.append(h("button", { class: "btn", type: "button", "data-close": true, text: "Cancel" }));
+      const save = h("button", { class: "btn go", type: "button", text: "Save changes" }); save.addEventListener("click", () => saveDetail(o, save, err)); right.append(save);
+    } else right.append(h("button", { class: "btn", type: "button", "data-close": true, text: "Close" }));
+    foot.append(right);
+  }
+  async function saveDetail(o, btn, err) {
+    const v = readForm(); if (!v) return; err.textContent = "";
+    if (!v.name.trim()) { err.textContent = "Name can't be empty."; return; }
+    const amt = v.amount.trim() === "" ? null : Number(v.amount);
+    if (amt != null && (!isFinite(amt) || amt < 0)) { err.textContent = "Amount must be a number of 0 or more."; return; }
+    const changed = Object.keys(v).some((k) => String(v[k]) !== String(snapshotVals[k]));
+    if (!changed) { closeWin($("detailWin")); return; }
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      await updateOrder(o.id, { name: v.name.trim(), status: v.status, assignee: v.assignee || null, amount: amt == null ? null : Math.round(amt * 100) / 100,
+        invoice_no: v.invoiceNo.trim(), job_order_no: v.jobOrderNo.trim(), items: v.items.trim(), address: v.address.trim(), remarks: v.remarks.trim() });
+      snapshotVals = null; toast(`Saved ${o.orderNo}`); await loadOrders(); loadHistory();
+    } catch (e) { err.textContent = dbMsg(e); }
+    btn.disabled = false; btn.textContent = "Save changes";
+  }
+
+  /* ---------- thread ---------- */
+  function startThread(id) {
+    stopThread(); S.threadLoaded = false;
+    $("msgs").replaceChildren(h("div", { class: "nothread", text: "Loading thread…" })); $("cText").value = ""; $("cErr").textContent = "";
+    loadComments();
+    threadChannel = sb.channel("thread-" + id)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "comments", filter: `order_id=eq.${id}` }, () => soon("comments", loadComments, 100))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "comments" }, () => soon("comments", loadComments, 100))
+      .subscribe();
+  }
+  function stopThread() { if (threadChannel) sb.removeChannel(threadChannel); threadChannel = null; S.comments = []; $("picker").hidden = true; }
+  async function loadComments() {
+    const id = S.openId; if (!id) return;
+    const { data, error } = await sb.from("comments").select("id,author,body,created_at").eq("order_id", id).order("created_at").limit(300);
+    if (S.openId !== id) return;
+    if (error) { $("msgs").replaceChildren(h("div", { class: "nothread", text: "Couldn't load this thread. Close and reopen the order." })); return; }
+    S.threadLoaded = true; S.comments = data || []; paintThread();
+  }
+  const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+  function renderBody(text) { return String(text || "").split(new RegExp(`(<@${UUID}>)`)).map((p) => { const m = p.match(new RegExp(`^<@(${UUID})>$`)); return m ? h("span", { class: "ment", text: "@" + nameOf(m[1]) }) : p; }); }
+  function paintThread() {
+    const o = S.orders.find((x) => x.id === S.openId); const n = S.comments.length;
+    $("tHead").textContent = n ? `Thread · ${n} ${n === 1 ? "reply" : "replies"}` : "Thread";
+    const box = $("msgs"); const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    if (!n) { if (S.threadLoaded) box.replaceChildren(h("div", { class: "nothread", text: "No replies yet. Ask a question, post an update, or @mention someone who needs to see this order." })); }
+    else {
+      box.replaceChildren(...S.comments.map((c) => {
+        const mine = c.author === S.user.id; const ts = Date.parse(c.created_at);
+        const del = (mine || role() === "admin") ? h("button", { class: "textlink", type: "button", style: "font-size:12px;margin-left:auto", text: "Delete", onclick: async () => {
+          const { data, error } = await sb.from("comments").delete().eq("id", c.id).select("id");
+          if (error || !data || !data.length) toast(dbMsg(error || REFUSED)); else loadComments();
+        } }) : null;
+        return h("div", { class: "msg" }, ini(c.author), h("div", null, h("div", { class: "hd" }, h("b", { text: nameOf(c.author) }), h("time", { title: fmtTime(ts), text: dshort.format(new Date(ts)) }), del), h("div", { class: "bd" }, renderBody(c.body))));
+      }));
+      if (atBottom || box.dataset.n !== String(n)) box.scrollTop = box.scrollHeight; box.dataset.n = String(n);
+    }
+    $("composer").hidden = !(o && can.comment());
+  }
+  const pending = new Map(); let pickHits = [], pickIdx = 0;
+  function mentionQuery() { const ta = $("cText"); const m = ta.value.slice(0, ta.selectionStart).match(/(?:^|\s)@([^\s@]{0,24})$/); return m ? m[1] : null; }
+  function updatePicker() {
+    const q = mentionQuery(); const pk = $("picker");
+    if (q == null) { pk.hidden = true; return; }
+    pickHits = activeIds().filter((id) => id !== S.user.id && nameOf(id).toLowerCase().includes(q.toLowerCase())).slice(0, 8); pickIdx = 0;
+    if (!pickHits.length) { pk.hidden = true; return; }
+    pk.replaceChildren(...pickHits.map((id, i) => h("button", { type: "button", role: "option", "aria-selected": i === pickIdx ? "true" : "false", onmousedown: (e) => { e.preventDefault(); choose(i); } }, ini(id), h("span", { text: nameOf(id) }))));
+    pk.hidden = false;
+  }
+  function choose(i) {
+    const id = pickHits[i]; if (!id) return; const name = nameOf(id); const ta = $("cText"); const pos = ta.selectionStart;
+    const before = ta.value.slice(0, pos).replace(/@([^\s@]{0,24})$/, "@" + name + " ");
+    ta.value = before + ta.value.slice(pos); ta.selectionStart = ta.selectionEnd = before.length; pending.set(name, id); $("picker").hidden = true; ta.focus();
+  }
+  $("cText").addEventListener("input", updatePicker);
+  $("cText").addEventListener("keydown", (e) => {
+    const pk = $("picker");
+    if (!pk.hidden && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); pickIdx = (pickIdx + (e.key === "ArrowDown" ? 1 : -1) + pickHits.length) % pickHits.length; [...pk.children].forEach((c, i) => c.setAttribute("aria-selected", i === pickIdx ? "true" : "false")); return; }
+    if (!pk.hidden && (e.key === "Enter" || e.key === "Tab")) { e.preventDefault(); choose(pickIdx); return; }
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+  });
+  $("cText").addEventListener("blur", () => setTimeout(() => { $("picker").hidden = true; }, 120));
+  $("cSend").addEventListener("click", send);
+  let sending = false;
+  async function send() {
+    const id = S.openId; let text = $("cText").value.trim(); if (!text || !id || sending) return;
+    const mentions = [];
+    [...pending.entries()].sort((a, b) => b[0].length - a[0].length).forEach(([name, uid]) => { if (text.includes("@" + name)) { text = text.split("@" + name).join(`<@${uid}>`); mentions.push(uid); } });
+    if (text.length > 4500) { $("cErr").textContent = "That reply is too long. Keep it under 4,000 characters."; return; }
+    sending = true; $("cSend").disabled = true; $("cErr").textContent = "";
+    const { error } = await sb.from("comments").insert({ order_id: id, body: text, mentions });
+    if (error) $("cErr").textContent = dbMsg(error); else { $("cText").value = ""; pending.clear(); loadComments(); }
+    sending = false; $("cSend").disabled = false;
+  }
+
+  /* ---------- add order ---------- */
+  function openAdd() { $("addForm").reset(); $("aErr").textContent = ""; openWin($("addWin")); setTimeout(() => $("aName").focus(), 30); }
+  $("fab").addEventListener("click", openAdd); $("addRow").addEventListener("click", openAdd);
+  $("addForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = $("aName").value.trim(), items = $("aItems").value.trim(), address = $("aAddress").value.trim(), amtRaw = $("aAmount").value.trim(), amount = Number(amtRaw), errEl = $("aErr"); errEl.textContent = "";
+    if (!name) { errEl.textContent = "Enter a name."; $("aName").focus(); return; }
+    if (!items) { errEl.textContent = "List at least one item."; $("aItems").focus(); return; }
+    if (amtRaw === "" || !isFinite(amount) || amount < 0) { errEl.textContent = "Enter an amount of 0 or more."; $("aAmount").focus(); return; }
+    const btn = $("aSave"); btn.disabled = true; btn.textContent = "Adding…";
+    const { data, error } = await sb.from("orders").insert({ name: name.slice(0, 200), items: items.slice(0, 5000), address: address.slice(0, 1000), amount: Math.round(amount * 100) / 100,
+      status: S.view.startsWith("st:") ? S.view.slice(3) : "Pending", assignee: S.view === "mine" ? S.user.id : null }).select("order_no").single();
+    btn.disabled = false; btn.textContent = "Add order";
+    if (error) { errEl.textContent = dbMsg(error); return; }
+    closeWin($("addWin")); toast(`Added ${data.order_no}`); loadOrders();
+  });
+
+  /* ---------- team access ---------- */
+  function openIam() {
+    $("iFilter").value = "";
+    $("iHow").textContent = ALLOW_SIGNUP ? "To add a teammate, send them this page's link. They create an account, then appear here as Waiting."
+      : "To add a teammate, create their login in Supabase (Authentication → Users → Add user, with auto-confirm on), then approve them here. They set their own password at first sign-in.";
+    paintPeople(); openWin($("iamWin"));
+  }
+  $("iFilter").addEventListener("input", () => paintPeople());
+  async function setRole(uid, r) {
+    const { data, error } = await sb.from("profiles").update({ role: r }).eq("id", uid).select("id");
+    if (error || !data || !data.length) { toast(dbMsg(error || REFUSED)); paintPeople(); return; }
+    toast(`${nameOf(uid)} is now ${ROLE_LABEL[r]}`); loadPeople();
+  }
+  function paintPeople() {
+    const box = $("iPeople"); box.replaceChildren(); const q = $("iFilter").value.trim().toLowerCase();
+    const order = { pending: 0, editor: 1, admin: 1, viewer: 1, disabled: 2 };
+    const list = Object.values(S.people).filter((p) => !q || (p.name || "").toLowerCase().includes(q) || (p.email || "").toLowerCase().includes(q))
+      .sort((a, b) => (order[a.role] ?? 1) - (order[b.role] ?? 1) || (a.name || "").localeCompare(b.name || ""));
+    for (const p of list) {
+      let control;
+      if (p.email === OWNER_EMAIL.toLowerCase()) control = h("span", { class: "role admin", text: "Owner · Admin" });
+      else if (p.role === "pending") control = h("span", { style: "display:flex;gap:6px" }, h("button", { class: "btn", type: "button", text: "Approve as Viewer", onclick: () => setRole(p.id, "viewer") }), h("button", { class: "btn go", type: "button", text: "Editor", onclick: () => setRole(p.id, "editor") }));
+      else { const sel = h("select", { "aria-label": "Role for " + (p.name || p.email) }, ["viewer", "editor", "admin", "disabled"].map((r) => h("option", { value: r, selected: p.role === r, text: ROLE_LABEL[r] }))); sel.addEventListener("change", () => setRole(p.id, sel.value)); control = sel; }
+      box.append(h("div", { class: "person" }, ini(p.id, "l"), h("div", { class: "nm" }, h("b", { text: (p.name || "Unnamed") + (p.id === S.user.id ? " (you)" : "") }), h("span", { text: (p.email || "") + (p.role === "pending" && p.email !== OWNER_EMAIL.toLowerCase() ? " · waiting for approval" : "") })), control));
+    }
+    if (!list.length) box.append(h("p", { class: "meta", style: "margin:6px 0 0", text: q ? "No one matches." : "No accounts yet." }));
+  }
+})();
+</script>
+</body>
+</html>
