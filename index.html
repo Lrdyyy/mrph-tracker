@@ -132,7 +132,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .notice.warn { border-left-color: var(--st-pending-fg); }
 
 .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
-table { width: 100%; border-collapse: collapse; min-width: 880px; }
+table { width: 100%; border-collapse: collapse; min-width: 1000px; }
 th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-size: 13px; font-weight: 700; color: var(--muted); background: var(--panel); white-space: nowrap; }
 tbody tr:last-child td { border-bottom: 0; }
@@ -152,6 +152,16 @@ tbody tr:hover td { background: var(--hover); }
 .s-done { background: var(--st-done-bg); color: var(--st-done-fg); }
 .s-hold { background: var(--st-hold-bg); color: var(--st-hold-fg); }
 .s-jo { background: var(--st-jo-bg); color: var(--st-jo-fg); }
+.p-paid { background: var(--st-done-bg); color: var(--st-done-fg); }
+.p-partial { background: var(--st-pending-bg); color: var(--st-pending-fg); }
+.paycell { display: grid; gap: 4px; justify-items: start; }
+.latetag { font-size: 12px; font-weight: 700; color: var(--st-cancel-fg); white-space: nowrap; }
+tbody tr.overdue td { background: color-mix(in srgb, var(--st-cancel-bg) 55%, var(--bg)); }
+tbody tr.overdue td:first-child { box-shadow: inset 4px 0 0 var(--st-cancel-fg); }
+tbody tr.overdue:hover td { background: var(--st-cancel-bg); }
+.card.overdue { border-color: var(--st-cancel-fg); box-shadow: inset 4px 0 0 var(--st-cancel-fg); }
+.notice.late { border-left-color: var(--st-cancel-fg); background: var(--st-cancel-bg); color: var(--st-cancel-fg); font-weight: 700; }
+.navbtn .badge.red { background: #e5484d; color: #fff; }
 select.pill { appearance: none; -webkit-appearance: none; border: 0; cursor: pointer; padding-right: 26px; font-family: inherit; background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position: calc(100% - 13px) 55%, calc(100% - 8px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
 select.pill:hover { filter: brightness(.96); }
 select.pill:disabled { opacity: .6; cursor: progress; }
@@ -391,7 +401,7 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
       <div id="tableView">
         <div class="tablewrap">
           <table>
-            <thead><tr><th scope="col">Name</th><th scope="col">Order</th><th scope="col">Invoice No.</th><th scope="col">Job Order No.</th><th scope="col">Status</th><th scope="col">Remarks</th></tr></thead>
+            <thead><tr><th scope="col">Name</th><th scope="col">Order</th><th scope="col">Invoice No.</th><th scope="col">Job Order No.</th><th scope="col">Status</th><th scope="col">Payment</th><th scope="col">Remarks</th></tr></thead>
             <tbody id="rows"></tbody>
           </table>
           <div class="empty" id="empty" hidden></div>
@@ -438,6 +448,8 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
   <form id="addForm" novalidate style="display:contents">
     <div class="win-body">
       <div class="field"><label for="aName">Name</label><input id="aName" autocomplete="off" maxlength="200" placeholder="Customer or company name"></div>
+      <div class="field"><label for="aPay">Payment status</label>
+        <select id="aPay"><option value="" selected disabled>Choose…</option><option>Partial Payment</option><option>Fully Paid</option></select></div>
       <div class="field"><label for="aAddress">Address</label><textarea id="aAddress" placeholder="Delivery or site address"></textarea></div>
       <div class="field"><span class="k">Items</span><div id="aItemsBox"></div></div>
       <div class="err" id="aErr" role="alert"></div>
@@ -471,27 +483,21 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 
 <div class="toast" id="toast" role="status" hidden></div>
 
+<script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
-/* ============================================================
-   SETUP: paste your Supabase project URL and anon/publishable key.
-   (Supabase dashboard → Project Settings → API / API Keys)
-   The anon key is meant to be public. Access is enforced by the
-   Row Level Security policies in schema.sql, not by this page.
-   ============================================================ */
-const SUPABASE_URL = "https://nhpudstyikrrcqrnxhhy.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_zGeE0BEgPvPansDlp91iIg_pueLBy0S";
-// Must match the email in is_owner() in schema.sql (lowercase).
-const OWNER_EMAIL = "hrldworks@gmail.com";
-// Leave false unless you connect custom SMTP in Supabase (see SETUP.md).
-// false = you create accounts in the Supabase dashboard; no public sign-up.
-const ALLOW_SIGNUP = false;
-/* ============================================================ */
+/* Settings live in config.js (uploaded once, next to this file), so
+   updating index.html never needs your keys pasted again. */
+const CFG = window.MRPH_CONFIG || {};
+const SUPABASE_URL = String(CFG.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+const SUPABASE_ANON_KEY = String(CFG.SUPABASE_ANON_KEY || "").trim();
+const OWNER_EMAIL = String(CFG.OWNER_EMAIL || "").trim().toLowerCase();
+const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
 
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const configured = !SUPABASE_URL.includes("PASTE_") && !SUPABASE_ANON_KEY.startsWith("PASTE_");
+  const configured = /^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 20 && OWNER_EMAIL.includes("@");
   const APP_URL = location.origin + location.pathname;
 
   function h(tag, attrs, ...kids) {
@@ -547,7 +553,7 @@ const ALLOW_SIGNUP = false;
 
   if (!configured) {
     showOnly("authView");
-    $("authErr").textContent = "Setup needed: paste your Supabase URL and key at the top of the script in index.html (see SETUP.md).";
+    $("authErr").textContent = !window.MRPH_CONFIG ? "Setup needed: config.js is missing. Upload it next to index.html (see SETUP.md)." : "Setup needed: check SUPABASE_URL (https://yourid.supabase.co), SUPABASE_ANON_KEY and OWNER_EMAIL in config.js.";
     $("authForm").addEventListener("submit", (e) => e.preventDefault());
     return;
   }
@@ -560,6 +566,11 @@ const ALLOW_SIGNUP = false;
   const STATUSES = ["Pending", "For Invoice Creation", "For JO Creation", "For Delivery", "Completed", "Cancelled"];
   const STATUS_CLASS = { "Pending": "s-pending", "For Invoice Creation": "s-progress", "For JO Creation": "s-jo", "For Delivery": "s-delivery", "Completed": "s-done", "Cancelled": "s-cancel" };
   const STATUS_DOT = { "Pending": "var(--st-pending-fg)", "For Invoice Creation": "var(--st-progress-fg)", "For JO Creation": "var(--st-jo-fg)", "For Delivery": "var(--st-delivery-fg)", "Completed": "var(--st-done-fg)", "Cancelled": "var(--st-cancel-fg)" };
+  const PAYMENTS = ["Partial Payment", "Fully Paid"];
+  const PAY_CLASS = { "Fully Paid": "p-paid", "Partial Payment": "p-partial" };
+  const OVERDUE_MS = 3 * 24 * 60 * 60 * 1000;
+  const unpaidDays = (o) => Math.floor((Date.now() - (o.paymentSince || o.createdAt || Date.now())) / 86400000);
+  const isOverdue = (o) => o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled" && Date.now() - (o.paymentSince || o.createdAt || Date.now()) > OVERDUE_MS;
   const ROLE_LABEL = { pending: "Waiting", viewer: "Viewer", editor: "Editor", admin: "Admin", disabled: "Removed" };
   const ACTIVE = ["viewer", "editor", "admin"];
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
@@ -709,7 +720,7 @@ const ALLOW_SIGNUP = false;
     return { id: o.id, orderNo: o.order_no, name: o.name, items: o.items, address: o.address, amount: o.amount == null ? null : Number(o.amount),
       invoiceNo: o.invoice_no, jobOrderNo: o.job_order_no, status: o.status, remarks: o.remarks, assignee: o.assignee,
       createdBy: o.created_by, createdAt: ts(o.created_at), updatedBy: o.updated_by, updatedAt: ts(o.updated_at),
-      commentCount: o.comment_count, lastCommentAt: ts(o.last_comment_at) };
+      commentCount: o.comment_count, lastCommentAt: ts(o.last_comment_at), paymentStatus: o.payment_status || "Partial Payment", paymentSince: ts(o.payment_since) };
   }
   async function loadOrders() {
     const { data, error } = await sb.from("orders").select("*").order("created_at", { ascending: false }).limit(2000);
@@ -721,6 +732,7 @@ const ALLOW_SIGNUP = false;
     const { data } = await sb.from("profiles").select("id,name,email,role");
     const m = {}; (data || []).forEach((p) => m[p.id] = p); S.people = m; paint();
   }
+  setInterval(() => { if (mainOn && !document.hidden && !stack.length) paint(); }, 5 * 60 * 1000);
   function startMain() {
     mainOn = true; S.loaded = false; paint();
     loadOrders(); loadPeople();
@@ -754,9 +766,9 @@ const ALLOW_SIGNUP = false;
   const activeIds = () => Object.values(S.people).filter((p) => ACTIVE.includes(p.role) || p.email === OWNER_EMAIL.toLowerCase()).map((p) => p.id);
 
   /* ---------- views ---------- */
-  function inView(o) { if (S.view === "mine") return o.assignee === S.user.id; if (S.view.startsWith("st:")) return o.status === S.view.slice(3); return true; }
+  function inView(o) { if (S.view === "mine") return o.assignee === S.user.id; if (S.view === "pay:partial") return o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled"; if (S.view === "pay:overdue") return isOverdue(o); if (S.view.startsWith("st:")) return o.status === S.view.slice(3); return true; }
   function filtered() { const q = S.q.trim().toLowerCase(); return S.orders.filter((o) => inView(o) && (!q || [o.name, o.orderNo, o.items, o.invoiceNo, o.jobOrderNo, o.remarks, o.address].some((v) => String(v || "").toLowerCase().includes(q)))); }
-  const viewTitle = () => S.view === "mine" ? "Assigned to me" : S.view.startsWith("st:") ? S.view.slice(3) : "All orders";
+  const viewTitle = () => S.view === "pay:partial" ? "Partial payment" : S.view === "pay:overdue" ? "Unpaid 3+ days" : S.view === "mine" ? "Assigned to me" : S.view.startsWith("st:") ? S.view.slice(3) : "All orders";
 
   function paintNav() {
     const nav = $("nav"); nav.replaceChildren();
@@ -764,7 +776,10 @@ const ALLOW_SIGNUP = false;
     for (const o of S.orders) { if (counts[o.status] != null) counts[o.status]++; if (o.assignee === S.user.id) mine++; }
     const btn = (v, icon, label, n) => h("button", { class: "navbtn", type: "button", "aria-current": S.view === v ? "true" : "false", onclick: () => { S.view = v; paint(); } }, icon, h("span", { class: "lab", text: label }), n != null ? h("span", { class: "n", text: String(n) }) : null);
     nav.append(btn("all", h("span", { class: "ic", text: "▤" }), "All orders", S.orders.length), btn("mine", h("span", { class: "ic", text: "@" }), "Assigned to me", mine),
-      h("div", { class: "navhead", text: "Status" }), ...STATUSES.map((s) => btn("st:" + s, h("span", { class: "sd", style: `background:${STATUS_DOT[s]}` }), s, counts[s])));
+      h("div", { class: "navhead", text: "Status" }), ...STATUSES.map((s) => btn("st:" + s, h("span", { class: "sd", style: `background:${STATUS_DOT[s]}` }), s, counts[s])),
+      h("div", { class: "navhead", text: "Payment" }),
+      btn("pay:partial", h("span", { class: "sd", style: "background:var(--st-pending-fg)" }), "Partial payment", S.orders.filter((o) => o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled").length),
+      (() => { const n = S.orders.filter(isOverdue).length; const b = btn("pay:overdue", h("span", { class: "ic", text: "!" }), "Unpaid 3+ days", null); if (n) b.append(h("span", { class: "badge red", text: String(n) })); else b.append(h("span", { class: "n", text: "0" })); return b; })());
     if (S.isOwner) {
       const waiting = Object.values(S.people).filter((p) => p.role === "pending" && p.email !== OWNER_EMAIL.toLowerCase()).length;
       nav.append(h("div", { class: "navhead", text: "Admin" }), h("button", { class: "navbtn", type: "button", onclick: openIam }, h("span", { class: "ic", text: "⚿" }), h("span", { class: "lab", text: "Team access" }), waiting ? h("span", { class: "badge", text: `${waiting} waiting` }) : null));
@@ -783,11 +798,12 @@ const ALLOW_SIGNUP = false;
     const tb = $("rows"); tb.replaceChildren();
     for (const o of list) {
       const open = () => openDetail(o.id);
-      tb.append(h("tr", null,
+      tb.append(h("tr", { class: isOverdue(o) ? "overdue" : null },
         h("td", null, h("div", { class: "namecell" }, o.assignee ? ini(o.assignee) : null, h("button", { class: "link", type: "button", onclick: open, text: o.name || "Untitled" }))),
         h("td", { class: "ordercell" }, h("button", { class: "link mono", type: "button", onclick: open, text: o.orderNo || "—" }), threadInd(o), h("span", { class: "items", text: firstLine(o.items) })),
         h("td", null, blankOr(o.invoiceNo, true)), h("td", null, blankOr(o.jobOrderNo, true)),
         h("td", null, statusCell(o)),
+        h("td", null, payCell(o)),
         h("td", null, o.remarks ? h("div", { class: "remarks", text: o.remarks }) : h("span", { class: "blank", text: "—" }))));
     }
   }
@@ -798,6 +814,20 @@ const ALLOW_SIGNUP = false;
     sel.addEventListener("change", () => { sel.disabled = true; setStatus(o.id, sel.value); });
     return sel;
   }
+  function payCell(o) {
+    const late = isOverdue(o);
+    const flag = late ? h("span", { class: "latetag", text: `Unpaid ${unpaidDays(o)} days` }) : null;
+    if (!can.edit()) return h("div", { class: "paycell" }, h("span", { class: "pill " + PAY_CLASS[o.paymentStatus], text: o.paymentStatus }), flag);
+    const sel = h("select", { class: "pill " + PAY_CLASS[o.paymentStatus], "aria-label": `Payment status of ${o.orderNo}` },
+      PAYMENTS.map((p) => h("option", { value: p, selected: o.paymentStatus === p, text: p })));
+    sel.addEventListener("change", () => { sel.disabled = true; setPayment(o.id, sel.value); });
+    return h("div", { class: "paycell" }, sel, flag);
+  }
+  async function setPayment(id, p) {
+    const o = S.orders.find((x) => x.id === id); if (!o || o.paymentStatus === p || !can.edit()) return;
+    const prev = [o.paymentStatus, o.paymentSince]; o.paymentStatus = p; o.paymentSince = Date.now(); paint();
+    try { await updateOrder(id, { payment_status: p }); toast(`${o.orderNo}: ${p}`); } catch (e) { [o.paymentStatus, o.paymentSince] = prev; paint(); toast(dbMsg(e)); }
+  }
   let dragId = null;
   function paintBoard(list) {
     const b = $("boardView"); b.replaceChildren();
@@ -807,9 +837,10 @@ const ALLOW_SIGNUP = false;
       const col = h("div", { class: "col" }, h("div", { class: "colhead" }, h("span", { class: "pill " + STATUS_CLASS[s], text: s }), h("span", { class: "n", text: String(items.length) })));
       if (!items.length) col.append(h("div", { class: "colempty", text: can.edit() ? "Drag an order here" : "Nothing here" }));
       for (const o of items) {
-        const card = h("div", { class: "card", tabindex: "0", role: "button", "aria-label": `${o.name}, ${o.orderNo}`, draggable: can.edit() ? "true" : null, onclick: () => openDetail(o.id), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(o.id); } } },
+        const card = h("div", { class: "card" + (isOverdue(o) ? " overdue" : ""), tabindex: "0", role: "button", "aria-label": `${o.name}, ${o.orderNo}`, draggable: can.edit() ? "true" : null, onclick: () => openDetail(o.id), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(o.id); } } },
           h("span", { class: "t", text: o.name || "Untitled" }),
           h("div", { class: "sub" }, h("span", { class: "mono", text: o.orderNo || "" }), h("span", { class: "mono", text: fmtAmount(o.amount) })),
+          h("div", { class: "sub" }, h("span", { class: "pill " + PAY_CLASS[o.paymentStatus], text: o.paymentStatus }), isOverdue(o) ? h("span", { class: "latetag", text: `Unpaid ${unpaidDays(o)} days` }) : null),
           (o.assignee || o.commentCount) ? h("div", { class: "sub" }, h("span", { style: "display:flex;align-items:center;gap:6px" }, o.assignee ? [ini(o.assignee), h("span", { text: nameOf(o.assignee) })] : null), o.commentCount ? h("span", { text: "💬 " + o.commentCount }) : null) : null);
         card.addEventListener("dragstart", (e) => { dragId = o.id; card.classList.add("dragging"); try { e.dataTransfer.setData("text/plain", o.id); } catch (x) {} });
         card.addEventListener("dragend", () => { dragId = null; card.classList.remove("dragging"); });
@@ -859,7 +890,7 @@ const ALLOW_SIGNUP = false;
   $("lyBoard").addEventListener("click", () => setLayout("board"));
   $("q").addEventListener("input", (e) => { S.q = e.target.value; paint(); });
   $("copyCsv").addEventListener("click", async () => {
-    const cols = [["Name", "name"], ["Order No.", "orderNo"], ["Items", "items"], ["Address", "address"], ["Amount", "amount"], ["Invoice No.", "invoiceNo"], ["Job Order No.", "jobOrderNo"], ["Status", "status"], ["Assignee", "assignee"], ["Remarks", "remarks"], ["Created", "createdAt"]];
+    const cols = [["Name", "name"], ["Order No.", "orderNo"], ["Items", "items"], ["Address", "address"], ["Amount", "amount"], ["Invoice No.", "invoiceNo"], ["Job Order No.", "jobOrderNo"], ["Status", "status"], ["Payment", "paymentStatus"], ["Assignee", "assignee"], ["Remarks", "remarks"], ["Created", "createdAt"]];
     const esc = (v) => { let s = String(v ?? ""); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const val = (o, k) => k === "assignee" ? (o.assignee ? nameOf(o.assignee) : "") : k === "createdAt" ? new Date(o.createdAt).toISOString() : o[k];
     const rows = [cols.map((c) => c[0]).join(",")].concat(filtered().map((o) => cols.map(([, k]) => esc(val(o, k))).join(",")));
@@ -1024,8 +1055,8 @@ const ALLOW_SIGNUP = false;
   }
 
   /* ---------- order details ---------- */
-  const EDIT_FIELDS = [["name", "Name"], ["status", "Status"], ["assignee", "Assignee"], ["invoiceNo", "Invoice No."], ["jobOrderNo", "Job Order No."], ["address", "Address"], ["remarks", "Remarks"]];
-  const COL = { name: "name", status: "status", assignee: "assignee", invoiceNo: "invoice_no", jobOrderNo: "job_order_no", address: "address", remarks: "remarks" };
+  const EDIT_FIELDS = [["name", "Name"], ["status", "Status"], ["paymentStatus", "Payment"], ["assignee", "Assignee"], ["invoiceNo", "Invoice No."], ["jobOrderNo", "Job Order No."], ["address", "Address"], ["remarks", "Remarks"]];
+  const COL = { name: "name", status: "status", paymentStatus: "payment_status", assignee: "assignee", invoiceNo: "invoice_no", jobOrderNo: "job_order_no", address: "address", remarks: "remarks" };
   let snapshotVals = null, detailEd = null;
   function openDetail(id) {
     S.openId = id; snapshotVals = null; detailEd = null; S.comments = []; S.history = []; S.items = null;
@@ -1052,6 +1083,7 @@ const ALLOW_SIGNUP = false;
     body.replaceChildren(); foot.replaceChildren();
     if (!o) { $("dKicker").textContent = ""; $("dTitle").textContent = "Order removed"; body.append(h("p", { class: "meta", text: "Someone deleted this order." })); foot.append(h("div", { class: "right" }, h("button", { class: "btn", type: "button", "data-close": true, text: "Close" }))); return; }
     $("dKicker").textContent = o.orderNo || ""; $("dTitle").textContent = o.name || "Untitled";
+    if (isOverdue(o)) body.append(h("div", { class: "notice late", text: `Payment still partial after ${unpaidDays(o)} days (since ${fmtTime(o.paymentSince)}). Set Payment to Fully Paid once settled.` }));
     const itemsBox = h("div", { class: "field full" }, h("span", { class: "k", text: "Items" }));
     if (S.items == null) itemsBox.append(h("div", { class: "meta", text: "Loading items…" }));
     if (can.edit()) {
@@ -1066,6 +1098,7 @@ const ALLOW_SIGNUP = false;
       body.append(h("div", { class: "grid2", "data-form": true },
         field("name", "Name", inp("name", { maxlength: "200" }), true),
         field("status", "Status", h("select", { id: "d_status", name: "status" }, STATUSES.map((s) => h("option", { value: s, selected: val("status") === s, text: s })))),
+        field("paymentStatus", "Payment", h("select", { id: "d_paymentStatus", name: "paymentStatus" }, PAYMENTS.map((p) => h("option", { value: p, selected: val("paymentStatus") === p, text: p })))),
         field("assignee", "Assignee", h("select", { id: "d_assignee", name: "assignee" }, h("option", { value: "", text: "Unassigned" }), people.map((id) => h("option", { value: id, selected: val("assignee") === id, text: id === S.user.id ? `${nameOf(id)} (you)` : nameOf(id) })))),
         field("invoiceNo", "Invoice No.", inp("invoiceNo", { class: "mono", placeholder: "e.g. INV-0457", maxlength: "80" })),
         field("jobOrderNo", "Job Order No.", inp("jobOrderNo", { class: "mono", placeholder: "e.g. JO-2611-021", maxlength: "80" })),
@@ -1078,6 +1111,7 @@ const ALLOW_SIGNUP = false;
       const txt = (v, mono) => v ? h("div", { class: "v" + (mono ? " mono" : ""), text: v }) : h("div", { class: "blank", text: "—" });
       body.append(h("div", { class: "grid2" },
         ro("Status", h("div", null, h("span", { class: "pill " + (STATUS_CLASS[o.status] || "s-hold"), text: o.status }))),
+        ro("Payment", h("div", { class: "paycell" }, h("span", { class: "pill " + PAY_CLASS[o.paymentStatus], text: o.paymentStatus }), isOverdue(o) ? h("span", { class: "latetag", text: `Unpaid ${unpaidDays(o)} days` }) : null)),
         ro("Assignee", o.assignee ? h("div", { class: "namecell" }, ini(o.assignee), h("span", { text: nameOf(o.assignee) })) : txt("")),
         ro("Invoice No.", txt(o.invoiceNo, true)), ro("Job Order No.", txt(o.jobOrderNo, true)),
         itemsBox, ro("Address", txt(o.address), true), ro("Remarks", txt(o.remarks), true)));
@@ -1123,8 +1157,10 @@ const ALLOW_SIGNUP = false;
         const keep = new Set(detailEd.allPhotos());
         removePhotos([...(S.items || []).flatMap((r) => r.photos || []), ...detailEd.newUploads()].filter((p) => !keep.has(p)));
       }
-      snapshotVals = null; detailEd = null; toast(`Saved ${o.orderNo}`);
-      await loadOrders(); await loadItems(); loadHistory();
+      snapshotVals = null; detailEd = null;
+      closeWin($("detailWin")); toast(`Saved ${o.orderNo}`);
+      loadOrders();
+      return;
     } catch (e) { err.textContent = dbMsg(e); }
     btn.disabled = false; btn.textContent = "Save changes";
   }
@@ -1217,10 +1253,11 @@ const ALLOW_SIGNUP = false;
     e.preventDefault();
     const name = $("aName").value.trim(), address = $("aAddress").value.trim(), errEl = $("aErr"); errEl.textContent = "";
     if (!name) { errEl.textContent = "Enter a name."; $("aName").focus(); return; }
+    const pay = $("aPay").value; if (!PAYMENTS.includes(pay)) { errEl.textContent = "Choose a payment status."; $("aPay").focus(); return; }
     const m = addEd.validate(); if (m) { errEl.textContent = m; return; }
     const btn = $("aSave"); btn.disabled = true; btn.textContent = "Adding…";
     const { data, error } = await sb.rpc("create_order", { p_id: addId, p_name: name.slice(0, 200), p_address: address.slice(0, 1000),
-      p_status: S.view.startsWith("st:") ? S.view.slice(3) : "Pending", p_assignee: S.view === "mine" ? S.user.id : null, p_items: addEd.value() });
+      p_status: S.view.startsWith("st:") ? S.view.slice(3) : "Pending", p_assignee: S.view === "mine" ? S.user.id : null, p_items: addEd.value(), p_payment: pay });
     btn.disabled = false; btn.textContent = "Add order";
     if (error) { errEl.textContent = dbMsg(error); return; }
     addEd = null; closeWin($("addWin")); toast(`Added ${data}`); loadOrders();
