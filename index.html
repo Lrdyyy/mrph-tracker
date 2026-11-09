@@ -267,6 +267,42 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 .pwrules li::before { content: "○ "; }
 .pwrules li.met::before { content: "● "; }
 .statecard form { text-align: left; display: grid; gap: 12px; }
+.ieditor { display: grid; gap: 6px; }
+.ihead, .ifields { display: grid; grid-template-columns: minmax(0, 1fr) 64px 128px 112px 32px; gap: 8px; align-items: center; }
+.ihead { font-size: 12px; font-weight: 700; color: var(--muted); padding: 0 2px; }
+.ihead span:nth-child(n+2) { text-align: right; }
+.ihead span:nth-child(2) { text-align: left; }
+.irows { display: grid; gap: 8px; }
+.irow { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.irow input { width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.irow input:focus { border-color: var(--link); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--link) 22%, transparent); }
+.iprice { display: flex; align-items: center; gap: 4px; }
+.iprice > span { color: var(--muted); font-weight: 700; }
+.iline { text-align: right; font-weight: 600; }
+.irow.ro .iqty, .irow.ro .iprice { justify-content: flex-end; text-align: right; color: var(--muted); }
+.x.sm { width: 30px; height: 30px; font-size: 18px; }
+.x[disabled] { opacity: .3; cursor: default; }
+.iphotos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.thumbwrap { position: relative; }
+.thumb { all: unset; cursor: zoom-in; display: block; width: 56px; height: 56px; border-radius: 7px; overflow: hidden; background: var(--line); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.thumbx { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: var(--ink); color: var(--bg); font-size: 13px; line-height: 20px; padding: 0; cursor: pointer; }
+.addphoto { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 1px dashed var(--muted); border-radius: 8px; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.addphoto:hover, .addphoto:focus-within { border-color: var(--link); color: var(--link); }
+.ifoot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.itotalrow { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 2px 0; border-top: 2px solid var(--line); margin-top: 4px; font-weight: 700; }
+.itotal { font: 700 20px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; }
+.totalbox { display: flex; align-items: baseline; gap: 10px; }
+.lightbox { position: fixed; inset: 0; z-index: 80; background: rgba(5, 8, 14, .88); display: grid; place-items: center; padding: 20px; cursor: zoom-out; }
+.lightbox img { max-width: 100%; max-height: calc(100% - 40px); border-radius: 8px; }
+.lbclose { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: #cfd6df; font-size: 13px; }
+@media (max-width: 600px) {
+  .ihead { display: none; }
+  .ifields { grid-template-columns: 70px minmax(0, 1fr) auto 30px; }
+  .ifields .idesc { grid-column: 1 / -1; }
+  .irow.ro .ifields > span:last-child { display: none; }
+}
 </style>
 </head>
 <body>
@@ -394,25 +430,25 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
   </div>
 </section>
 
-<section class="win" id="addWin" role="dialog" aria-modal="true" aria-labelledby="aTitle" hidden>
+<section class="win lg" id="addWin" role="dialog" aria-modal="true" aria-labelledby="aTitle" hidden>
   <div class="win-head" data-drag>
     <div><span class="kicker">New order</span><h2 id="aTitle">Add order</h2></div>
     <button class="x" type="button" data-close aria-label="Close">×</button>
   </div>
   <form id="addForm" novalidate style="display:contents">
     <div class="win-body">
-      <div class="field"><label for="aName">Name</label><input id="aName" autocomplete="off" placeholder="Customer or company name"></div>
-      <div class="field"><label for="aItems">Items</label><textarea id="aItems" placeholder="One item per line, e.g. 2 × CAT6 cable box"></textarea></div>
+      <div class="field"><label for="aName">Name</label><input id="aName" autocomplete="off" maxlength="200" placeholder="Customer or company name"></div>
       <div class="field"><label for="aAddress">Address</label><textarea id="aAddress" placeholder="Delivery or site address"></textarea></div>
-      <div class="field"><label for="aAmount">Amount (₱)</label><input id="aAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="field"><span class="k">Items</span><div id="aItemsBox"></div></div>
       <div class="err" id="aErr" role="alert"></div>
     </div>
     <div class="win-foot">
-      <span class="meta">The order number is assigned automatically.</span>
+      <div class="totalbox"><span class="k">Total</span><span id="aTotal"></span></div>
       <div class="right"><button class="btn" type="button" data-close>Cancel</button><button class="btn go" type="submit" id="aSave">Add order</button></div>
     </div>
   </form>
 </section>
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-label="Photo"><img alt="Item photo"><span class="lbclose">Tap anywhere to close</span></div>
 
 <section class="win lg" id="iamWin" role="dialog" aria-modal="true" aria-labelledby="iTitle" hidden>
   <div class="win-head" data-drag>
@@ -530,7 +566,7 @@ const ALLOW_SIGNUP = false;
   const dt = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
   const dshort = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-  const S = { user: null, me: null, role: "none", isOwner: false, people: {}, orders: [], comments: [], history: [],
+  const S = { user: null, me: null, role: "none", isOwner: false, people: {}, orders: [], comments: [], history: [], items: null,
     view: "all", layout: "table", q: "", openId: null, loaded: false, threadLoaded: false, recovery: false };
   try { const l = localStorage.getItem("mrph.layout"); if (l === "board" || l === "table") S.layout = l; } catch (e) {}
 
@@ -690,7 +726,7 @@ const ALLOW_SIGNUP = false;
     loadOrders(); loadPeople();
     const slow = setTimeout(() => { if (!S.loaded) { $("loadNote").textContent = "Can't reach the order data yet. Check your connection; this page keeps trying."; $("loadNote").hidden = false; } }, 10000);
     mainChannel = sb.channel("mrph-main")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => soon("orders", loadOrders))
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => soon("orders", () => { loadOrders(); if (S.openId && !detailDirty()) loadItems(); }))
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => soon("people", loadPeople))
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "order_history" }, (p) => { if (S.openId && p.new && p.new.order_id === S.openId) soon("hist", loadHistory); })
       .subscribe((status) => {
@@ -833,11 +869,11 @@ const ALLOW_SIGNUP = false;
   /* ---------- floating windows ---------- */
   const stack = [];
   function openWin(win) { win.style.left = ""; win.style.top = ""; win.style.transform = ""; win.hidden = false; $("scrim").hidden = false; if (!stack.includes(win)) stack.push(win); }
-  function closeWin(win) { win.hidden = true; const i = stack.indexOf(win); if (i >= 0) stack.splice(i, 1); if (!stack.length) $("scrim").hidden = true; if (win.id === "detailWin") { S.openId = null; stopThread(); } }
+  function closeWin(win) { win.hidden = true; const i = stack.indexOf(win); if (i >= 0) stack.splice(i, 1); if (!stack.length) $("scrim").hidden = true; if (win.id === "detailWin") { S.openId = null; stopThread(); discardDetailUploads(); } if (win.id === "addWin") discardAddUploads(); }
   function closeAllWins() { [...stack].forEach(closeWin); }
   document.addEventListener("click", (e) => { const c = e.target.closest("[data-close]"); if (c) closeWin(c.closest(".win")); });
   $("scrim").addEventListener("click", () => { const t = stack[stack.length - 1]; if (t) closeWin(t); });
-  document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; if (!$("picker").hidden) { $("picker").hidden = true; return; } if (stack.length) closeWin(stack[stack.length - 1]); });
+  document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; if (!$("lightbox").hidden) { $("lightbox").hidden = true; return; } if (!$("picker").hidden) { $("picker").hidden = true; return; } if (stack.length) closeWin(stack[stack.length - 1]); });
   document.querySelectorAll("[data-drag]").forEach((head) => {
     head.addEventListener("pointerdown", (e) => {
       if (e.target.closest("button")) return;
@@ -850,48 +886,201 @@ const ALLOW_SIGNUP = false;
     });
   });
 
+  /* ---------- photos ---------- */
+  const BUCKET = "item-photos";
+  const MAX_PHOTOS = 6;
+  const urlCache = new Map();
+  async function signedUrls(paths) {
+    const need = paths.filter((p) => { const c = urlCache.get(p); return !c || c.exp < Date.now() + 60000; });
+    if (need.length) {
+      const { data } = await sb.storage.from(BUCKET).createSignedUrls(need, 3600);
+      (data || []).forEach((d) => { if (d.signedUrl) urlCache.set(d.path, { url: d.signedUrl, exp: Date.now() + 3600000 }); });
+    }
+    return paths.map((p) => (urlCache.get(p) || {}).url || "");
+  }
+  async function shrink(file) {
+    let bmp;
+    try { bmp = await createImageBitmap(file, { imageOrientation: "from-image" }); }
+    catch (e) { throw new Error("That file isn't a photo this browser can read. Use a JPG or PNG."); }
+    const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas"); c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height); if (bmp.close) bmp.close();
+    return await new Promise((res, rej) => c.toBlob((b) => b ? res(b) : rej(new Error("Couldn't process that photo.")), "image/jpeg", 0.82));
+  }
+  async function uploadPhoto(orderId, file) {
+    const blob = await shrink(file);
+    const path = `${orderId}/${crypto.randomUUID()}.jpg`;
+    const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: "image/jpeg", upsert: false });
+    if (error) throw new Error(/row-level|unauthor|403/i.test(error.message) ? "Your role can't upload photos." : "Upload failed. Check your connection.");
+    urlCache.set(path, { url: URL.createObjectURL(blob), exp: Date.now() + 3600000 });
+    return path;
+  }
+  function removePhotos(paths) { if (paths && paths.length) sb.storage.from(BUCKET).remove(paths).catch(() => {}); }
+  function thumb(path, onRemove) {
+    const img = h("img", { alt: "Item photo", loading: "lazy" });
+    signedUrls([path]).then(([u]) => { if (u) img.src = u; });
+    const open = h("button", { class: "thumb", type: "button", "aria-label": "View photo", onclick: () => openLightbox(path) }, img);
+    return h("span", { class: "thumbwrap" }, open, onRemove ? h("button", { class: "thumbx", type: "button", "aria-label": "Remove photo", text: "×", onclick: onRemove }) : null);
+  }
+  function openLightbox(path) {
+    const lb = $("lightbox"); const img = lb.querySelector("img"); img.removeAttribute("src");
+    signedUrls([path]).then(([u]) => { if (u) img.src = u; });
+    lb.hidden = false;
+  }
+  $("lightbox").addEventListener("click", () => { $("lightbox").hidden = true; });
+
+  /* ---------- items editor ---------- */
+  const money = (n) => (typeof n === "number" && isFinite(n)) ? peso.format(n) : "—";
+  function itemsEditor(orderId, items) {
+    const st = { rows: [], uploading: 0, uploaded: [] };
+    const toRow = (r) => ({ key: crypto.randomUUID(), description: r.description || "", qty: r.qty == null ? "1" : String(Number(r.qty)), price: r.unit_price == null ? "" : String(Number(r.unit_price)), photos: [...(r.photos || [])] });
+    st.rows = (items && items.length ? items : [{}]).map(toRow);
+    const list = h("div", { class: "irows" });
+    const totalEl = h("span", { class: "itotal mono" });
+    const busyEl = h("span", { class: "meta", "aria-live": "polite" });
+    const errEl = h("div", { class: "err", role: "alert" });
+    const lineTotal = (r) => { const q = Number(r.qty || 1), p = Number(r.price); return r.price !== "" && isFinite(q) && isFinite(p) ? q * p : null; };
+    function total() { let t = 0, any = false; for (const r of st.rows) { const l = lineTotal(r); if (l != null) { t += l; any = true; } } return any ? Math.round(t * 100) / 100 : null; }
+    function refreshTotals() {
+      list.querySelectorAll("[data-ltotal]").forEach((el) => { const r = st.rows.find((x) => x.key === el.dataset.ltotal); el.textContent = r ? money(lineTotal(r)) : ""; });
+      totalEl.textContent = money(total());
+      busyEl.textContent = st.uploading ? `Uploading ${st.uploading} photo${st.uploading === 1 ? "" : "s"}…` : "";
+    }
+    function photoStrip(r) {
+      const strip = h("div", { class: "iphotos" });
+      const draw = () => {
+        strip.replaceChildren(...r.photos.map((p) => thumb(p, () => { r.photos = r.photos.filter((x) => x !== p); draw(); })));
+        if (r.photos.length < MAX_PHOTOS) {
+          const inp = h("input", { type: "file", accept: "image/*", multiple: true, hidden: true });
+          inp.addEventListener("change", async () => {
+            const files = [...inp.files].slice(0, MAX_PHOTOS - r.photos.length); inp.value = "";
+            errEl.textContent = "";
+            for (const f of files) {
+              st.uploading++; refreshTotals();
+              try { const path = await uploadPhoto(orderId, f); st.uploaded.push(path); r.photos.push(path); draw(); }
+              catch (x) { errEl.textContent = x.message; }
+              st.uploading--; refreshTotals();
+            }
+          });
+          strip.append(h("label", { class: "addphoto" }, inp, h("span", { "aria-hidden": "true", text: "📷" }), " Add photo"));
+        }
+      };
+      draw(); return strip;
+    }
+    function render() {
+      list.replaceChildren(...st.rows.map((r, i) => {
+        const desc = h("input", { class: "idesc", value: r.description, maxlength: "300", placeholder: "Item, e.g. Arch mirror 24×60, black frame", "aria-label": `Item ${i + 1}` });
+        desc.addEventListener("input", () => { r.description = desc.value; });
+        const qty = h("input", { class: "iqty mono", type: "number", min: "0.01", step: "any", inputmode: "decimal", value: r.qty, "aria-label": `Quantity for item ${i + 1}` });
+        qty.addEventListener("input", () => { r.qty = qty.value; refreshTotals(); });
+        const price = h("input", { class: "mono", type: "number", min: "0", step: "0.01", inputmode: "decimal", value: r.price, placeholder: "0.00", "aria-label": `Price for item ${i + 1}` });
+        price.addEventListener("input", () => { r.price = price.value; refreshTotals(); });
+        const rm = h("button", { class: "x sm", type: "button", "aria-label": `Remove item ${i + 1}`, text: "×", disabled: st.rows.length === 1 ? true : null,
+          onclick: () => { st.rows = st.rows.filter((x) => x !== r); render(); } });
+        return h("div", { class: "irow" },
+          h("div", { class: "ifields" }, desc, qty, h("div", { class: "iprice" }, h("span", { text: "₱" }), price), h("span", { class: "iline mono", "data-ltotal": r.key }), rm),
+          photoStrip(r));
+      }));
+      refreshTotals();
+    }
+    const addBtn = h("button", { class: "btn", type: "button", text: "+ Add another item", onclick: () => {
+      if (st.rows.length >= 50) return; st.rows.push(toRow({})); render();
+      const all = list.querySelectorAll(".idesc"); all[all.length - 1].focus();
+    } });
+    const el = h("div", { class: "ieditor" },
+      h("div", { class: "ihead", "aria-hidden": "true" }, h("span", { text: "Item" }), h("span", { text: "Qty" }), h("span", { text: "Price" }), h("span", { text: "Amount" }), h("span")),
+      list, h("div", { class: "ifoot" }, addBtn, busyEl), errEl);
+    render();
+    const initialSig = JSON.stringify(st.rows.map(({ key, ...r }) => r));
+    return {
+      el, totalEl, total, errEl,
+      busy: () => st.uploading > 0,
+      dirty: () => JSON.stringify(st.rows.map(({ key, ...r }) => r)) !== initialSig,
+      newUploads: () => st.uploaded.slice(),
+      allPhotos: () => st.rows.flatMap((r) => r.photos),
+      validate() {
+        const bad = st.rows.findIndex((r) => !r.description.trim());
+        if (bad >= 0) return `Item ${bad + 1} needs a description.`;
+        if (st.rows.some((r) => r.qty !== "" && !(Number(r.qty) > 0))) return "Quantities must be more than 0.";
+        if (st.rows.some((r) => r.price !== "" && !(Number(r.price) >= 0))) return "Prices can't be negative.";
+        if (st.uploading) return "Wait for the photos to finish uploading.";
+        return "";
+      },
+      value: () => st.rows.map((r) => ({ description: r.description.trim(), qty: r.qty === "" ? 1 : Number(r.qty), unit_price: r.price === "" ? null : Math.round(Number(r.price) * 100) / 100, photos: r.photos }))
+    };
+  }
+  function itemsView(items) {
+    if (!items.length) return h("div", { class: "blank", text: "No items listed." });
+    let t = 0, any = false;
+    const rows = items.map((r) => {
+      const q = Number(r.qty), p = r.unit_price == null ? null : Number(r.unit_price); const l = p == null ? null : q * p; if (l != null) { t += l; any = true; }
+      return h("div", { class: "irow ro" },
+        h("div", { class: "ifields" }, h("span", { class: "idesc v", text: r.description }), h("span", { class: "iqty mono", text: "×" + (Number.isInteger(q) ? q : q.toFixed(2)) }),
+          h("span", { class: "iprice mono", text: money(p) }), h("span", { class: "iline mono", text: money(l) }), h("span")),
+        r.photos && r.photos.length ? h("div", { class: "iphotos" }, r.photos.map((p2) => thumb(p2))) : null);
+    });
+    return h("div", { class: "ieditor" }, h("div", { class: "ihead", "aria-hidden": "true" }, h("span", { text: "Item" }), h("span", { text: "Qty" }), h("span", { text: "Price" }), h("span", { text: "Amount" }), h("span")),
+      h("div", { class: "irows" }, rows), h("div", { class: "itotalrow" }, h("span", { text: "Total" }), h("span", { class: "itotal mono", text: money(any ? t : null) })));
+  }
+
   /* ---------- order details ---------- */
-  const EDIT_FIELDS = [["name", "Name"], ["status", "Status"], ["assignee", "Assignee"], ["amount", "Amount"], ["invoiceNo", "Invoice No."], ["jobOrderNo", "Job Order No."], ["items", "Items"], ["address", "Address"], ["remarks", "Remarks"]];
-  let snapshotVals = null;
-  function openDetail(id) { S.openId = id; snapshotVals = null; S.comments = []; S.history = []; paintDetail(); openWin($("detailWin")); startThread(id); loadHistory(); }
+  const EDIT_FIELDS = [["name", "Name"], ["status", "Status"], ["assignee", "Assignee"], ["invoiceNo", "Invoice No."], ["jobOrderNo", "Job Order No."], ["address", "Address"], ["remarks", "Remarks"]];
+  const COL = { name: "name", status: "status", assignee: "assignee", invoiceNo: "invoice_no", jobOrderNo: "job_order_no", address: "address", remarks: "remarks" };
+  let snapshotVals = null, detailEd = null;
+  function openDetail(id) {
+    S.openId = id; snapshotVals = null; detailEd = null; S.comments = []; S.history = []; S.items = null;
+    paintDetail(); openWin($("detailWin")); startThread(id); loadHistory(); loadItems();
+  }
+  async function loadItems() {
+    const id = S.openId; if (!id) return;
+    const { data, error } = await sb.from("order_items").select("description,qty,unit_price,photos,position").eq("order_id", id).order("position");
+    if (S.openId !== id) return;
+    S.items = error ? [] : (data || []);
+    if (!detailDirty()) paintDetail();
+  }
   async function loadHistory() {
     const id = S.openId; if (!id) return;
     const { data } = await sb.from("order_history").select("actor,summary,created_at").eq("order_id", id).order("created_at", { ascending: false }).limit(50);
     if (S.openId !== id) return; S.history = data || []; if (!detailDirty()) paintDetail();
   }
   function readForm() { const f = $("dBody").querySelector("[data-form]"); if (!f) return null; const o = {}; for (const [k] of EDIT_FIELDS) { const el = f.querySelector(`[name="${k}"]`); if (el) o[k] = el.value; } return o; }
-  function detailDirty() { if (!snapshotVals) return false; const v = readForm(); return !!v && Object.keys(v).some((k) => String(v[k]) !== String(snapshotVals[k])); }
+  function fieldsDirty() { if (!snapshotVals) return false; const v = readForm(); return !!v && Object.keys(v).some((k) => String(v[k]) !== String(snapshotVals[k])); }
+  function detailDirty() { return fieldsDirty() || !!(detailEd && (detailEd.dirty() || detailEd.busy())); }
+  function discardDetailUploads() { if (detailEd) { const keep = new Set((S.items || []).flatMap((r) => r.photos || [])); removePhotos(detailEd.newUploads().filter((p) => !keep.has(p))); } detailEd = null; }
   function paintDetail() {
     const o = S.orders.find((x) => x.id === S.openId); const body = $("dBody"), foot = $("dFoot");
     body.replaceChildren(); foot.replaceChildren();
     if (!o) { $("dKicker").textContent = ""; $("dTitle").textContent = "Order removed"; body.append(h("p", { class: "meta", text: "Someone deleted this order." })); foot.append(h("div", { class: "right" }, h("button", { class: "btn", type: "button", "data-close": true, text: "Close" }))); return; }
     $("dKicker").textContent = o.orderNo || ""; $("dTitle").textContent = o.name || "Untitled";
+    const itemsBox = h("div", { class: "field full" }, h("span", { class: "k", text: "Items" }));
+    if (S.items == null) itemsBox.append(h("div", { class: "meta", text: "Loading items…" }));
     if (can.edit()) {
-      const val = (k) => k === "amount" ? (typeof o.amount === "number" ? String(o.amount) : "") : (o[k] || "");
+      const val = (k) => o[k] || "";
       snapshotVals = {}; for (const [k] of EDIT_FIELDS) snapshotVals[k] = val(k);
       const field = (k, label, el, full) => h("div", { class: "field" + (full ? " full" : "") }, h("label", { for: "d_" + k, text: label }), el);
       const inp = (k, extra) => h("input", Object.assign({ id: "d_" + k, name: k, value: val(k), autocomplete: "off" }, extra || {}));
       const ta = (k) => { const t = h("textarea", { id: "d_" + k, name: k }); t.value = val(k); return t; };
       const people = activeIds().sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
       if (o.assignee && !people.includes(o.assignee)) people.push(o.assignee);
+      if (S.items != null) { detailEd = itemsEditor(o.id, S.items); itemsBox.append(detailEd.el, h("div", { class: "itotalrow" }, h("span", { text: "Total" }), detailEd.totalEl)); }
       body.append(h("div", { class: "grid2", "data-form": true },
         field("name", "Name", inp("name", { maxlength: "200" }), true),
         field("status", "Status", h("select", { id: "d_status", name: "status" }, STATUSES.map((s) => h("option", { value: s, selected: val("status") === s, text: s })))),
         field("assignee", "Assignee", h("select", { id: "d_assignee", name: "assignee" }, h("option", { value: "", text: "Unassigned" }), people.map((id) => h("option", { value: id, selected: val("assignee") === id, text: id === S.user.id ? `${nameOf(id)} (you)` : nameOf(id) })))),
-        field("amount", "Amount (₱)", inp("amount", { type: "number", min: "0", step: "0.01", inputmode: "decimal" })),
         field("invoiceNo", "Invoice No.", inp("invoiceNo", { class: "mono", placeholder: "e.g. INV-0457", maxlength: "80" })),
-        field("jobOrderNo", "Job Order No.", inp("jobOrderNo", { class: "mono", placeholder: "e.g. JO-2611-021", maxlength: "80" }), true),
-        field("items", "Items", ta("items"), true), field("address", "Address", ta("address"), true), field("remarks", "Remarks", ta("remarks"), true)));
+        field("jobOrderNo", "Job Order No.", inp("jobOrderNo", { class: "mono", placeholder: "e.g. JO-2611-021", maxlength: "80" })),
+        itemsBox,
+        field("address", "Address", ta("address"), true), field("remarks", "Remarks", ta("remarks"), true)));
     } else {
-      snapshotVals = null;
+      snapshotVals = null; detailEd = null;
+      if (S.items != null) itemsBox.append(itemsView(S.items));
       const ro = (label, node, full) => h("div", { class: "field" + (full ? " full" : "") }, h("span", { class: "k", text: label }), node);
       const txt = (v, mono) => v ? h("div", { class: "v" + (mono ? " mono" : ""), text: v }) : h("div", { class: "blank", text: "—" });
       body.append(h("div", { class: "grid2" },
         ro("Status", h("div", null, h("span", { class: "pill " + (STATUS_CLASS[o.status] || "s-hold"), text: o.status }))),
-        ro("Amount", h("div", { class: "amount", text: fmtAmount(o.amount) })),
         ro("Assignee", o.assignee ? h("div", { class: "namecell" }, ini(o.assignee), h("span", { text: nameOf(o.assignee) })) : txt("")),
-        ro("Invoice No.", txt(o.invoiceNo, true)), ro("Job Order No.", txt(o.jobOrderNo, true), true),
-        ro("Items", txt(o.items), true), ro("Address", txt(o.address), true), ro("Remarks", txt(o.remarks), true)));
+        ro("Invoice No.", txt(o.invoiceNo, true)), ro("Job Order No.", txt(o.jobOrderNo, true)),
+        itemsBox, ro("Address", txt(o.address), true), ro("Remarks", txt(o.remarks), true)));
     }
     body.append(h("div", { class: "meta" }, `Added by ${nameOf(o.createdBy)} · ${fmtTime(o.createdAt)}`, o.updatedAt && o.updatedAt !== o.createdAt ? [h("br"), `Last updated by ${nameOf(o.updatedBy)} · ${fmtTime(o.updatedAt)}`] : null));
     if (S.history.length) body.append(h("details", null, h("summary", { text: `Change history (${S.history.length})` }), h("ul", { class: "hist" }, S.history.map((x) => h("li", null, h("time", { text: fmtTime(Date.parse(x.created_at)) }), h("span", null, h("b", { text: nameOf(x.actor) }), " " + x.summary))))));
@@ -901,8 +1090,10 @@ const ALLOW_SIGNUP = false;
       del.addEventListener("click", async () => {
         if (!armed) { armed = true; del.classList.add("armed"); del.textContent = "Click again to delete"; setTimeout(() => { armed = false; del.classList.remove("armed"); del.textContent = "Delete order"; }, 4000); return; }
         del.disabled = true;
+        const photos = [...(S.items || []).flatMap((r) => r.photos || []), ...(detailEd ? detailEd.newUploads() : [])];
         const { data, error } = await sb.from("orders").delete().eq("id", o.id).select("id");
         if (error || !data || !data.length) { err.textContent = dbMsg(error || REFUSED); del.disabled = false; return; }
+        removePhotos(photos); detailEd = null;
         closeWin($("detailWin")); toast(`Deleted ${o.orderNo}`); loadOrders();
       });
       foot.append(del);
@@ -917,15 +1108,23 @@ const ALLOW_SIGNUP = false;
   async function saveDetail(o, btn, err) {
     const v = readForm(); if (!v) return; err.textContent = "";
     if (!v.name.trim()) { err.textContent = "Name can't be empty."; return; }
-    const amt = v.amount.trim() === "" ? null : Number(v.amount);
-    if (amt != null && (!isFinite(amt) || amt < 0)) { err.textContent = "Amount must be a number of 0 or more."; return; }
-    const changed = Object.keys(v).some((k) => String(v[k]) !== String(snapshotVals[k]));
-    if (!changed) { closeWin($("detailWin")); return; }
+    if (detailEd && (detailEd.dirty() || detailEd.busy())) { const m = detailEd.validate(); if (m) { err.textContent = m; return; } }
+    const fChanged = fieldsDirty(), iChanged = !!(detailEd && detailEd.dirty());
+    if (!fChanged && !iChanged) { closeWin($("detailWin")); return; }
     btn.disabled = true; btn.textContent = "Saving…";
     try {
-      await updateOrder(o.id, { name: v.name.trim(), status: v.status, assignee: v.assignee || null, amount: amt == null ? null : Math.round(amt * 100) / 100,
-        invoice_no: v.invoiceNo.trim(), job_order_no: v.jobOrderNo.trim(), items: v.items.trim(), address: v.address.trim(), remarks: v.remarks.trim() });
-      snapshotVals = null; toast(`Saved ${o.orderNo}`); await loadOrders(); loadHistory();
+      if (fChanged) {
+        const patch = {}; for (const [k] of EDIT_FIELDS) if (String(v[k]) !== String(snapshotVals[k])) patch[COL[k]] = k === "assignee" ? (v[k] || null) : v[k].trim();
+        await updateOrder(o.id, patch);
+      }
+      if (iChanged) {
+        const { error } = await sb.rpc("save_order_items", { p_order: o.id, p_items: detailEd.value() });
+        if (error) throw error;
+        const keep = new Set(detailEd.allPhotos());
+        removePhotos([...(S.items || []).flatMap((r) => r.photos || []), ...detailEd.newUploads()].filter((p) => !keep.has(p)));
+      }
+      snapshotVals = null; detailEd = null; toast(`Saved ${o.orderNo}`);
+      await loadOrders(); await loadItems(); loadHistory();
     } catch (e) { err.textContent = dbMsg(e); }
     btn.disabled = false; btn.textContent = "Save changes";
   }
@@ -1005,20 +1204,26 @@ const ALLOW_SIGNUP = false;
   }
 
   /* ---------- add order ---------- */
-  function openAdd() { $("addForm").reset(); $("aErr").textContent = ""; openWin($("addWin")); setTimeout(() => $("aName").focus(), 30); }
+  let addEd = null, addId = null;
+  function openAdd() {
+    $("addForm").reset(); $("aErr").textContent = "";
+    addId = crypto.randomUUID(); addEd = itemsEditor(addId, []);
+    $("aItemsBox").replaceChildren(addEd.el); $("aTotal").replaceChildren(addEd.totalEl);
+    openWin($("addWin")); setTimeout(() => $("aName").focus(), 30);
+  }
+  function discardAddUploads() { if (addEd) removePhotos(addEd.newUploads()); addEd = null; }
   $("fab").addEventListener("click", openAdd); $("addRow").addEventListener("click", openAdd);
   $("addForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const name = $("aName").value.trim(), items = $("aItems").value.trim(), address = $("aAddress").value.trim(), amtRaw = $("aAmount").value.trim(), amount = Number(amtRaw), errEl = $("aErr"); errEl.textContent = "";
+    const name = $("aName").value.trim(), address = $("aAddress").value.trim(), errEl = $("aErr"); errEl.textContent = "";
     if (!name) { errEl.textContent = "Enter a name."; $("aName").focus(); return; }
-    if (!items) { errEl.textContent = "List at least one item."; $("aItems").focus(); return; }
-    if (amtRaw === "" || !isFinite(amount) || amount < 0) { errEl.textContent = "Enter an amount of 0 or more."; $("aAmount").focus(); return; }
+    const m = addEd.validate(); if (m) { errEl.textContent = m; return; }
     const btn = $("aSave"); btn.disabled = true; btn.textContent = "Adding…";
-    const { data, error } = await sb.from("orders").insert({ name: name.slice(0, 200), items: items.slice(0, 5000), address: address.slice(0, 1000), amount: Math.round(amount * 100) / 100,
-      status: S.view.startsWith("st:") ? S.view.slice(3) : "Pending", assignee: S.view === "mine" ? S.user.id : null }).select("order_no").single();
+    const { data, error } = await sb.rpc("create_order", { p_id: addId, p_name: name.slice(0, 200), p_address: address.slice(0, 1000),
+      p_status: S.view.startsWith("st:") ? S.view.slice(3) : "Pending", p_assignee: S.view === "mine" ? S.user.id : null, p_items: addEd.value() });
     btn.disabled = false; btn.textContent = "Add order";
     if (error) { errEl.textContent = dbMsg(error); return; }
-    closeWin($("addWin")); toast(`Added ${data.order_no}`); loadOrders();
+    addEd = null; closeWin($("addWin")); toast(`Added ${data}`); loadOrders();
   });
 
   /* ---------- team access ---------- */
