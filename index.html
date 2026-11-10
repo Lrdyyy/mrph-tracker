@@ -23,6 +23,7 @@
   --st-done-bg: #dcf3e4; --st-done-fg: #1d6b3c;
   --st-hold-bg: #e7eaef; --st-hold-fg: #4a5466;
   --st-jo-bg: #d8f1f0; --st-jo-fg: #0e6463;
+  --st-prod-bg: #fde6d4; --st-prod-fg: #9a4410;
   --st-cancel-bg: #fbe1e3; --st-cancel-fg: #a01f2b;
   color-scheme: light;
 }
@@ -39,6 +40,7 @@
     --st-done-bg: #15382a; --st-done-fg: #7fdca3;
     --st-hold-bg: #2b313b; --st-hold-fg: #b4bdcc;
     --st-jo-bg: #133a3a; --st-jo-fg: #7fd6d3;
+    --st-prod-bg: #42260f; --st-prod-fg: #ffb27a;
     --st-cancel-bg: #45191f; --st-cancel-fg: #ff9aa2;
     color-scheme: dark;
   }
@@ -153,6 +155,7 @@ tr.clickrow { cursor: pointer; }
 .s-done { background: var(--st-done-bg); color: var(--st-done-fg); }
 .s-hold { background: var(--st-hold-bg); color: var(--st-hold-fg); }
 .s-jo { background: var(--st-jo-bg); color: var(--st-jo-fg); }
+.s-prod { background: var(--st-prod-bg); color: var(--st-prod-fg); }
 .p-paid { background: var(--st-done-bg); color: var(--st-done-fg); }
 .p-partial { background: var(--st-pending-bg); color: var(--st-pending-fg); }
 .co { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
@@ -194,7 +197,7 @@ select.pill option { background: var(--bg); color: var(--ink); }
 
 .scrim { position: fixed; inset: 0; z-index: 30; background: rgba(10, 14, 22, .32); }
 .win { position: fixed; z-index: 40; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(540px, calc(100vw - 24px)); max-height: calc(100% - 24px); display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
-.win.xl { width: min(920px, calc(100vw - 24px)); height: min(640px, calc(100% - 24px)); }
+.win.xl { width: min(1100px, calc(100vw - 24px)); height: min(720px, calc(100% - 24px)); }
 .win.lg { width: min(640px, calc(100vw - 24px)); }
 .win-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px 11px 18px; border-bottom: 1px solid var(--line); cursor: move; user-select: none; touch-action: none; }
 .win-head h2 { margin: 0; font-size: 18px; font-weight: 900; overflow-wrap: anywhere; }
@@ -212,6 +215,26 @@ select.pill option { background: var(--bg); color: var(--ink); }
   .split { grid-template-columns: 1fr; overflow-y: auto; }
   .split > .pane + .pane { border-left: 0; border-top: 1px solid var(--line); min-height: 360px; }
 }
+.preview { flex: 0 1 auto; max-height: 54%; overflow-y: auto; padding: 14px 16px; display: grid; gap: 12px; align-content: start; background: var(--bg); border-bottom: 1px solid var(--line); }
+.pvhero { height: 130px; border-radius: 10px; overflow: hidden; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+.pvhero button { all: unset; cursor: zoom-in; display: block; width: 100%; height: 100%; }
+.pvhero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pvhero .ph { display: grid; justify-items: center; gap: 4px; }
+.pvhero .ph b { font-size: 26px; opacity: .55; }
+.pvtags { display: flex; flex-wrap: wrap; gap: 6px; }
+.pvmeta { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 14px; margin: 0; font-size: 13.5px; }
+.pvmeta dt { color: var(--muted); font-weight: 700; }
+.pvmeta dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.pvitems { display: grid; gap: 8px; }
+.pvitem { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
+.pvitem .pic { all: unset; width: 46px; height: 46px; border-radius: 7px; overflow: hidden; background: var(--line); display: grid; place-items: center; color: var(--muted); font-size: 18px; }
+.pvitem button.pic { cursor: zoom-in; }
+.pvitem .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pvitem b { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.pvitem .d { font-size: 12.5px; color: var(--muted); }
+.pvitem .amt { font-weight: 600; }
+.pvtotal { display: flex; justify-content: space-between; align-items: baseline; padding-top: 8px; border-top: 2px solid var(--line); font-weight: 700; }
+@media (max-width: 760px) { .preview { max-height: none; } }
 .panehead { padding: 10px 16px; font-size: 13px; font-weight: 700; color: var(--muted); border-bottom: 1px solid var(--line); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
 @media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
@@ -292,10 +315,10 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 .pwrules li.met::before { content: "● "; }
 .statecard form { text-align: left; display: grid; gap: 12px; }
 .ieditor { display: grid; gap: 6px; }
-.ihead, .ifields { display: grid; grid-template-columns: minmax(0, 1fr) 130px 64px 128px 112px 32px; gap: 8px; align-items: center; }
-.ihead { font-size: 12px; font-weight: 700; color: var(--muted); padding: 0 2px; }
-.ihead span:nth-child(n+2) { text-align: right; }
-.ihead span:nth-child(2), .ihead span:nth-child(3) { text-align: left; }
+.ihead, .ifields { display: grid; grid-template-columns: minmax(0, 1fr) 64px minmax(96px, 128px) minmax(84px, auto) 32px; gap: 8px; align-items: center; }
+.ifields .idesc { grid-column: 1 / -1; font-weight: 700; }
+.ihead { font-size: 12px; font-weight: 700; color: var(--muted); padding: 0 11px; }
+.ihead span:nth-child(4) { text-align: right; }
 .irows { display: grid; gap: 8px; }
 .irow { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .irow input { width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
@@ -441,6 +464,8 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
   <div class="split">
     <div class="pane"><div class="win-body" id="dBody" style="flex:1"></div><div class="win-foot" id="dFoot"></div></div>
     <div class="pane">
+      <div class="panehead">Preview</div>
+      <div class="preview" id="preview" aria-live="polite"></div>
       <div class="panehead" id="tHead">Thread</div>
       <div class="msgs" id="msgs"></div>
       <div class="composer" id="composer">
@@ -579,9 +604,9 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
 
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
 
-  const STATUSES = ["Pending", "For Invoice Creation", "For JO Creation", "For Delivery", "Completed", "Cancelled"];
-  const STATUS_CLASS = { "Pending": "s-pending", "For Invoice Creation": "s-progress", "For JO Creation": "s-jo", "For Delivery": "s-delivery", "Completed": "s-done", "Cancelled": "s-cancel" };
-  const STATUS_DOT = { "Pending": "var(--st-pending-fg)", "For Invoice Creation": "var(--st-progress-fg)", "For JO Creation": "var(--st-jo-fg)", "For Delivery": "var(--st-delivery-fg)", "Completed": "var(--st-done-fg)", "Cancelled": "var(--st-cancel-fg)" };
+  const STATUSES = ["Pending", "For Invoice Creation", "For JO Creation", "In Production", "For Delivery", "Completed", "Cancelled"];
+  const STATUS_CLASS = { "Pending": "s-pending", "For Invoice Creation": "s-progress", "For JO Creation": "s-jo", "In Production": "s-prod", "For Delivery": "s-delivery", "Completed": "s-done", "Cancelled": "s-cancel" };
+  const STATUS_DOT = { "Pending": "var(--st-pending-fg)", "For Invoice Creation": "var(--st-progress-fg)", "For JO Creation": "var(--st-jo-fg)", "In Production": "var(--st-prod-fg)", "For Delivery": "var(--st-delivery-fg)", "Completed": "var(--st-done-fg)", "Cancelled": "var(--st-cancel-fg)" };
   const PAYMENTS = ["Partial Payment", "Fully Paid"];
   const COMPANIES = ["Mirrora", "Cebu Mirrors"];
   const CO_CLASS = { "Mirrora": "co-mirrora", "Cebu Mirrors": "co-cebu" };
@@ -913,7 +938,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       $("addRow").hidden = !(S.loaded && can.add());
     } else paintBoard(list);
     $("fab").hidden = !(S.loaded && can.add());
-    if (S.openId && !$("detailWin").hidden) { if (!detailDirty()) paintDetail(); paintThread(); }
+    if (S.openId && !$("detailWin").hidden) { if (!detailDirty()) paintDetail(); else paintPreview(); paintThread(); }
     if (!$("iamWin").hidden) paintPeople();
   }
   function setLayout(l) { S.layout = l; try { localStorage.setItem("mrph.layout", l); } catch (e) {} paint(); }
@@ -1039,7 +1064,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     }
     function render() {
       list.replaceChildren(...st.rows.map((r, i) => {
-        const desc = h("input", { class: "idesc", value: r.description, maxlength: "300", placeholder: "Item, e.g. Arch mirror 24×60, black frame", "aria-label": `Item ${i + 1}` });
+        const desc = h("input", { class: "idesc", value: r.description, maxlength: "300", placeholder: "Item description, e.g. Arch mirror, black frame", "aria-label": `Item ${i + 1}` });
         desc.addEventListener("input", () => { r.description = desc.value; });
         const size = h("input", { class: "isize", value: r.size, maxlength: "80", placeholder: "e.g. 20×60 in", "aria-label": `Size for item ${i + 1}` });
         size.addEventListener("input", () => { r.size = size.value; });
@@ -1060,7 +1085,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       const all = list.querySelectorAll(".idesc"); all[all.length - 1].focus();
     } });
     const el = h("div", { class: "ieditor" },
-      h("div", { class: "ihead", "aria-hidden": "true" }, h("span", { text: "Item" }), h("span", { text: "Size" }), h("span", { text: "Qty" }), h("span", { text: "Price" }), h("span", { text: "Amount" }), h("span")),
+      h("div", { class: "ihead", "aria-hidden": "true" }, h("span", { text: "Size" }), h("span", { text: "Qty" }), h("span", { text: "Price" }), h("span", { text: "Amount" }), h("span")),
       list, h("div", { class: "ifoot" }, addBtn, busyEl), errEl);
     render();
     const initialSig = JSON.stringify(st.rows.map(({ key, ...r }) => r));
@@ -1092,7 +1117,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
           h("span", { class: "iprice mono", text: money(p) }), h("span", { class: "iline mono", text: money(l) }), h("span")),
         r.photos && r.photos.length ? h("div", { class: "iphotos" }, r.photos.map((p2) => thumb(p2))) : null);
     });
-    return h("div", { class: "ieditor" }, h("div", { class: "ihead", "aria-hidden": "true" }, h("span", { text: "Item" }), h("span", { text: "Size" }), h("span", { text: "Qty" }), h("span", { text: "Price" }), h("span", { text: "Amount" }), h("span")),
+    return h("div", { class: "ieditor" }, h("div", { class: "ihead", "aria-hidden": "true" }, h("span", { text: "Size" }), h("span", { text: "Qty" }), h("span", { text: "Price" }), h("span", { text: "Amount" }), h("span")),
       h("div", { class: "irows" }, rows), h("div", { class: "itotalrow" }, h("span", { text: "Total" }), h("span", { class: "itotal mono", text: money(any ? t : null) })));
   }
 
@@ -1109,12 +1134,38 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     const { data, error } = await sb.from("order_items").select("description,size,qty,unit_price,photos,position").eq("order_id", id).order("position");
     if (S.openId !== id) return;
     S.items = error ? [] : (data || []);
-    if (!detailDirty()) paintDetail();
+    if (!detailDirty()) paintDetail(); else paintPreview();
   }
   async function loadHistory() {
     const id = S.openId; if (!id) return;
     const { data } = await sb.from("order_history").select("actor,summary,created_at").eq("order_id", id).order("created_at", { ascending: false }).limit(50);
     if (S.openId !== id) return; S.history = data || []; if (!detailDirty()) paintDetail();
+  }
+  function paintPreview() {
+    const box = $("preview"); const o = S.orders.find((x) => x.id === S.openId);
+    if (!o) { box.replaceChildren(); return; }
+    const items = S.items;
+    const firstPhoto = (items || []).flatMap((r) => r.photos || [])[0];
+    const pic = (path, cls) => {
+      const img = h("img", { alt: "Item photo" }); signedUrls([path]).then(([u]) => { if (u) img.src = u; });
+      return h("button", { class: cls, type: "button", "aria-label": "View photo", onclick: () => openLightbox(path) }, img);
+    };
+    const hero = h("div", { class: "pvhero" }, firstPhoto ? pic(firstPhoto) : h("div", { class: "ph" }, h("b", { text: "🖼" }), h("span", { text: items == null ? "Loading…" : "No photo yet" })));
+    const tags = h("div", { class: "pvtags" }, h("span", { class: "pill " + (STATUS_CLASS[o.status] || "s-hold"), text: o.status }), o.company ? coPill(o.company) : null,
+      h("span", { class: "pill " + (PAY_CLASS[o.paymentStatus] || ""), text: o.paymentStatus }), isOverdue(o) ? h("span", { class: "latetag", text: `Unpaid ${unpaidDays(o)} days` }) : null);
+    let t = 0, any = false;
+    const list = items == null ? h("div", { class: "meta", text: "Loading items…" }) : !items.length ? h("div", { class: "blank", text: "No items listed." }) :
+      h("div", { class: "pvitems" }, items.map((r) => {
+        const q = Number(r.qty || 1), p = r.unit_price == null ? null : Number(r.unit_price), l = p == null ? null : q * p;
+        if (l != null) { t += l; any = true; }
+        const bits = [r.size, "×" + (Number.isInteger(q) ? q : q.toFixed(2)), p == null ? null : money(p)].filter(Boolean).join(" · ");
+        return h("div", { class: "pvitem" }, r.photos && r.photos.length ? pic(r.photos[0], "pic") : h("span", { class: "pic", "aria-hidden": "true", text: "▢" }),
+          h("div", null, h("b", { text: r.description || "Untitled item" }), h("span", { class: "d", text: bits })), h("span", { class: "amt mono", text: money(l) }));
+      }));
+    const total = any ? Math.round(t * 100) / 100 : o.amount;
+    const meta = [["Assignee", o.assignee ? nameOf(o.assignee) : "Unassigned"], ["Invoice No.", o.invoiceNo || "—"], ["Job Order No.", o.jobOrderNo || "—"], ["Address", o.address], ["Remarks", o.remarks]].filter(([, v]) => v);
+    box.replaceChildren(hero, tags, list, h("div", { class: "pvtotal" }, h("span", { text: "Total" }), h("span", { class: "itotal mono", text: money(total) })),
+      h("dl", { class: "pvmeta" }, meta.flatMap(([k, v]) => [h("dt", { text: k }), h("dd", { text: v })])));
   }
   function readForm() { const f = $("dBody").querySelector("[data-form]"); if (!f) return null; const o = {}; for (const [k] of EDIT_FIELDS) { const el = f.querySelector(`[name="${k}"]`); if (el) o[k] = el.value; } return o; }
   function fieldsDirty() { if (!snapshotVals) return false; const v = readForm(); return !!v && Object.keys(v).some((k) => String(v[k]) !== String(snapshotVals[k])); }
@@ -1123,6 +1174,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   function paintDetail() {
     const o = S.orders.find((x) => x.id === S.openId); const body = $("dBody"), foot = $("dFoot");
     body.replaceChildren(); foot.replaceChildren();
+    paintPreview();
     if (!o) { $("dKicker").textContent = ""; $("dTitle").textContent = "Order removed"; body.append(h("p", { class: "meta", text: "Someone deleted this order." })); foot.append(h("div", { class: "right" }, h("button", { class: "btn", type: "button", "data-close": true, text: "Close" }))); return; }
     $("dKicker").textContent = o.orderNo || ""; $("dTitle").textContent = o.name || "Untitled";
     if (isOverdue(o)) body.append(h("div", { class: "notice late", text: `Payment still partial after ${unpaidDays(o)} days (since ${fmtTime(o.paymentSince)}). Set Payment to Fully Paid once settled.` }));
