@@ -137,6 +137,7 @@ th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--li
 th { font-size: 13px; font-weight: 700; color: var(--muted); background: var(--panel); white-space: nowrap; }
 tbody tr:last-child td { border-bottom: 0; }
 tbody tr:hover td { background: var(--hover); }
+tr.clickrow { cursor: pointer; }
 .link { all: unset; cursor: pointer; color: var(--link); font-weight: 700; }
 .link:hover { text-decoration: underline; }
 .link:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 2px; }
@@ -272,8 +273,18 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
   .top, .content { padding-left: 16px; padding-right: 16px; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .win { animation: pop .14s ease-out; }
-  @keyframes pop { from { opacity: .4; } to { opacity: 1; } }
+  .win { animation: winIn .22s cubic-bezier(.2, .9, .3, 1.15) both; }
+  .win.closing { animation: winOut .15s ease-in both; pointer-events: none; }
+  .scrim { animation: fadeIn .2s ease-out both; }
+  .scrim.closing { animation: fadeOut .15s ease-in both; }
+  .lightbox:not([hidden]) { animation: fadeIn .18s ease-out both; }
+  .lightbox:not([hidden]) img { animation: winIn .24s cubic-bezier(.2, .9, .3, 1.15) both; }
+  .toast:not([hidden]) { animation: toastIn .22s cubic-bezier(.2, .9, .3, 1.2) both; }
+  @keyframes winIn { from { opacity: 0; scale: .92; translate: 0 12px; } to { opacity: 1; scale: 1; translate: 0 0; } }
+  @keyframes winOut { from { opacity: 1; scale: 1; } to { opacity: 0; scale: .95; translate: 0 6px; } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes toastIn { from { opacity: 0; translate: 0 14px; } to { opacity: 1; translate: 0 0; } }
 }
 .pwrules { margin: -6px 0 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 12.5px; color: var(--muted); }
 .pwrules li.met { color: var(--st-done-fg); }
@@ -281,10 +292,10 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 .pwrules li.met::before { content: "● "; }
 .statecard form { text-align: left; display: grid; gap: 12px; }
 .ieditor { display: grid; gap: 6px; }
-.ihead, .ifields { display: grid; grid-template-columns: minmax(0, 1fr) 64px 128px 112px 32px; gap: 8px; align-items: center; }
+.ihead, .ifields { display: grid; grid-template-columns: minmax(0, 1fr) 130px 64px 128px 112px 32px; gap: 8px; align-items: center; }
 .ihead { font-size: 12px; font-weight: 700; color: var(--muted); padding: 0 2px; }
 .ihead span:nth-child(n+2) { text-align: right; }
-.ihead span:nth-child(2) { text-align: left; }
+.ihead span:nth-child(2), .ihead span:nth-child(3) { text-align: left; }
 .irows { display: grid; gap: 8px; }
 .irow { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .irow input { width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
@@ -313,7 +324,7 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 @media (max-width: 600px) {
   .ihead { display: none; }
   .ifields { grid-template-columns: 70px minmax(0, 1fr) auto 30px; }
-  .ifields .idesc { grid-column: 1 / -1; }
+  .ifields .idesc, .ifields .isize { grid-column: 1 / -1; }
   .irow.ro .ifields > span:last-child { display: none; }
 }
 </style>
@@ -807,7 +818,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     const tb = $("rows"); tb.replaceChildren();
     for (const o of list) {
       const open = () => openDetail(o.id);
-      tb.append(h("tr", { class: isOverdue(o) ? "overdue" : null },
+      tb.append(h("tr", { class: "clickrow" + (isOverdue(o) ? " overdue" : ""), onclick: (e) => { if (!e.target.closest("button, select, a, input, textarea")) open(); } },
         h("td", null, h("div", { class: "namecell" }, o.assignee ? ini(o.assignee) : null, h("button", { class: "link", type: "button", onclick: open, text: o.name || "Untitled" }))),
         h("td", null, coPill(o.company)),
         h("td", { class: "ordercell" }, h("button", { class: "link mono", type: "button", onclick: open, text: o.orderNo || "—" }), threadInd(o), h("span", { class: "items", text: firstLine(o.items) })),
@@ -863,6 +874,15 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       b.append(col);
     }
   }
+  async function saveSizes(orderId, sizes) {
+    const { data, error } = await sb.from("order_items").select("position,size").eq("order_id", orderId).order("position");
+    if (error) throw error;
+    for (let i = 0; i < (data || []).length; i++) {
+      const want = sizes[i] || null; if ((data[i].size || null) === want) continue;
+      const { data: d2, error: e2 } = await sb.from("order_items").update({ size: want }).eq("order_id", orderId).eq("position", data[i].position).select("position");
+      if (e2) throw e2; if (!d2 || !d2.length) throw REFUSED;
+    }
+  }
   async function updateOrder(id, patch) {
     const { data, error } = await sb.from("orders").update(patch).eq("id", id).select("id");
     if (error) throw error; if (!data || !data.length) throw REFUSED;
@@ -910,8 +930,16 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
 
   /* ---------- floating windows ---------- */
   const stack = [];
-  function openWin(win) { win.style.left = ""; win.style.top = ""; win.style.transform = ""; win.hidden = false; $("scrim").hidden = false; if (!stack.includes(win)) stack.push(win); }
-  function closeWin(win) { win.hidden = true; const i = stack.indexOf(win); if (i >= 0) stack.splice(i, 1); if (!stack.length) $("scrim").hidden = true; if (win.id === "detailWin") { S.openId = null; stopThread(); discardDetailUploads(); } if (win.id === "addWin") discardAddUploads(); }
+  const animOn = () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function hideAnimated(el) {
+    clearTimeout(el._closeT);
+    if (!animOn() || el.hidden) { el.hidden = true; el.classList.remove("closing"); return; }
+    el.classList.add("closing");
+    el._closeT = setTimeout(() => { el.hidden = true; el.classList.remove("closing"); }, 150);
+  }
+  function showAnimated(el) { clearTimeout(el._closeT); el.classList.remove("closing"); el.hidden = false; }
+  function openWin(win) { win.style.left = ""; win.style.top = ""; win.style.transform = ""; showAnimated(win); showAnimated($("scrim")); if (!stack.includes(win)) stack.push(win); }
+  function closeWin(win) { hideAnimated(win); const i = stack.indexOf(win); if (i >= 0) stack.splice(i, 1); if (!stack.length) hideAnimated($("scrim")); if (win.id === "detailWin") { S.openId = null; stopThread(); discardDetailUploads(); } if (win.id === "addWin") discardAddUploads(); }
   function closeAllWins() { [...stack].forEach(closeWin); }
   document.addEventListener("click", (e) => { const c = e.target.closest("[data-close]"); if (c) closeWin(c.closest(".win")); });
   $("scrim").addEventListener("click", () => { const t = stack[stack.length - 1]; if (t) closeWin(t); });
@@ -975,7 +1003,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   const money = (n) => (typeof n === "number" && isFinite(n)) ? peso.format(n) : "—";
   function itemsEditor(orderId, items) {
     const st = { rows: [], uploading: 0, uploaded: [] };
-    const toRow = (r) => ({ key: crypto.randomUUID(), description: r.description || "", qty: r.qty == null ? "1" : String(Number(r.qty)), price: r.unit_price == null ? "" : String(Number(r.unit_price)), photos: [...(r.photos || [])] });
+    const toRow = (r) => ({ key: crypto.randomUUID(), description: r.description || "", size: r.size || "", qty: r.qty == null ? "1" : String(Number(r.qty)), price: r.unit_price == null ? "" : String(Number(r.unit_price)), photos: [...(r.photos || [])] });
     st.rows = (items && items.length ? items : [{}]).map(toRow);
     const list = h("div", { class: "irows" });
     const totalEl = h("span", { class: "itotal mono" });
@@ -1013,6 +1041,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       list.replaceChildren(...st.rows.map((r, i) => {
         const desc = h("input", { class: "idesc", value: r.description, maxlength: "300", placeholder: "Item, e.g. Arch mirror 24×60, black frame", "aria-label": `Item ${i + 1}` });
         desc.addEventListener("input", () => { r.description = desc.value; });
+        const size = h("input", { class: "isize", value: r.size, maxlength: "80", placeholder: "e.g. 20×60 in", "aria-label": `Size for item ${i + 1}` });
+        size.addEventListener("input", () => { r.size = size.value; });
         const qty = h("input", { class: "iqty mono", type: "number", min: "0.01", step: "any", inputmode: "decimal", value: r.qty, "aria-label": `Quantity for item ${i + 1}` });
         qty.addEventListener("input", () => { r.qty = qty.value; refreshTotals(); });
         const price = h("input", { class: "mono", type: "number", min: "0", step: "0.01", inputmode: "decimal", value: r.price, placeholder: "0.00", "aria-label": `Price for item ${i + 1}` });
@@ -1020,7 +1050,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
         const rm = h("button", { class: "x sm", type: "button", "aria-label": `Remove item ${i + 1}`, text: "×", disabled: st.rows.length === 1 ? true : null,
           onclick: () => { st.rows = st.rows.filter((x) => x !== r); render(); } });
         return h("div", { class: "irow" },
-          h("div", { class: "ifields" }, desc, qty, h("div", { class: "iprice" }, h("span", { text: "₱" }), price), h("span", { class: "iline mono", "data-ltotal": r.key }), rm),
+          h("div", { class: "ifields" }, desc, size, qty, h("div", { class: "iprice" }, h("span", { text: "₱" }), price), h("span", { class: "iline mono", "data-ltotal": r.key }), rm),
           photoStrip(r));
       }));
       refreshTotals();
@@ -1030,7 +1060,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       const all = list.querySelectorAll(".idesc"); all[all.length - 1].focus();
     } });
     const el = h("div", { class: "ieditor" },
-      h("div", { class: "ihead", "aria-hidden": "true" }, h("span", { text: "Item" }), h("span", { text: "Qty" }), h("span", { text: "Price" }), h("span", { text: "Amount" }), h("span")),
+      h("div", { class: "ihead", "aria-hidden": "true" }, h("span", { text: "Item" }), h("span", { text: "Size" }), h("span", { text: "Qty" }), h("span", { text: "Price" }), h("span", { text: "Amount" }), h("span")),
       list, h("div", { class: "ifoot" }, addBtn, busyEl), errEl);
     render();
     const initialSig = JSON.stringify(st.rows.map(({ key, ...r }) => r));
@@ -1040,6 +1070,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       dirty: () => JSON.stringify(st.rows.map(({ key, ...r }) => r)) !== initialSig,
       newUploads: () => st.uploaded.slice(),
       allPhotos: () => st.rows.flatMap((r) => r.photos),
+      sizes: () => st.rows.map((r) => r.size.trim().slice(0, 80)),
       validate() {
         const bad = st.rows.findIndex((r) => !r.description.trim());
         if (bad >= 0) return `Item ${bad + 1} needs a description.`;
@@ -1057,11 +1088,11 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     const rows = items.map((r) => {
       const q = Number(r.qty), p = r.unit_price == null ? null : Number(r.unit_price); const l = p == null ? null : q * p; if (l != null) { t += l; any = true; }
       return h("div", { class: "irow ro" },
-        h("div", { class: "ifields" }, h("span", { class: "idesc v", text: r.description }), h("span", { class: "iqty mono", text: "×" + (Number.isInteger(q) ? q : q.toFixed(2)) }),
+        h("div", { class: "ifields" }, h("span", { class: "idesc v", text: r.description }), h("span", { class: "isize" + (r.size ? " v" : " blank"), text: r.size || "—" }), h("span", { class: "iqty mono", text: "×" + (Number.isInteger(q) ? q : q.toFixed(2)) }),
           h("span", { class: "iprice mono", text: money(p) }), h("span", { class: "iline mono", text: money(l) }), h("span")),
         r.photos && r.photos.length ? h("div", { class: "iphotos" }, r.photos.map((p2) => thumb(p2))) : null);
     });
-    return h("div", { class: "ieditor" }, h("div", { class: "ihead", "aria-hidden": "true" }, h("span", { text: "Item" }), h("span", { text: "Qty" }), h("span", { text: "Price" }), h("span", { text: "Amount" }), h("span")),
+    return h("div", { class: "ieditor" }, h("div", { class: "ihead", "aria-hidden": "true" }, h("span", { text: "Item" }), h("span", { text: "Size" }), h("span", { text: "Qty" }), h("span", { text: "Price" }), h("span", { text: "Amount" }), h("span")),
       h("div", { class: "irows" }, rows), h("div", { class: "itotalrow" }, h("span", { text: "Total" }), h("span", { class: "itotal mono", text: money(any ? t : null) })));
   }
 
@@ -1075,7 +1106,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   }
   async function loadItems() {
     const id = S.openId; if (!id) return;
-    const { data, error } = await sb.from("order_items").select("description,qty,unit_price,photos,position").eq("order_id", id).order("position");
+    const { data, error } = await sb.from("order_items").select("description,size,qty,unit_price,photos,position").eq("order_id", id).order("position");
     if (S.openId !== id) return;
     S.items = error ? [] : (data || []);
     if (!detailDirty()) paintDetail();
@@ -1167,6 +1198,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       if (iChanged) {
         const { error } = await sb.rpc("save_order_items", { p_order: o.id, p_items: detailEd.value() });
         if (error) throw error;
+        await saveSizes(o.id, detailEd.sizes());
         const keep = new Set(detailEd.allPhotos());
         removePhotos([...(S.items || []).flatMap((r) => r.photos || []), ...detailEd.newUploads()].filter((p) => !keep.has(p)));
       }
@@ -1285,8 +1317,9 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       p_status: S.view.startsWith("st:") ? S.view.slice(3) : "Pending", p_assignee: S.view === "mine" ? S.user.id : null, p_items: addEd.value(), p_payment: pay });
     btn.disabled = false; btn.textContent = "Add order";
     if (error) { errEl.textContent = dbMsg(error); return; }
-    const newId = addId; addEd = null; closeWin($("addWin")); toast(`Added ${data}`);
+    const newId = addId, sizes = addEd.sizes(); addEd = null; closeWin($("addWin")); toast(`Added ${data}`);
     try { await updateOrder(newId, { company }); } catch (e2) { toast(`Added ${data}, but the company didn't save. Open the order and set it again.`); }
+    if (sizes.some(Boolean)) { try { await saveSizes(newId, sizes); } catch (e3) { toast(`Added ${data}, but the item sizes didn't save. Open the order and set them again.`); } }
     loadOrders();
   });
 
