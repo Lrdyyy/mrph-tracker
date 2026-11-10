@@ -226,7 +226,8 @@ select.pill option { background: var(--bg); color: var(--ink); }
 .pvmeta dt { color: var(--muted); font-weight: 700; }
 .pvmeta dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .pvitems { display: grid; gap: 8px; }
-.pvitem { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
+.pvitem { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
+.pvitem.nopic { grid-template-columns: minmax(0, 1fr) auto; }
 .pvitem .pic { all: unset; width: 46px; height: 46px; border-radius: 7px; overflow: hidden; background: var(--line); display: grid; place-items: center; color: var(--muted); font-size: 18px; }
 .pvitem button.pic { cursor: zoom-in; }
 .pvitem .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -1045,20 +1046,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       const strip = h("div", { class: "iphotos" });
       const draw = () => {
         strip.replaceChildren(...r.photos.map((p) => thumb(p, () => { r.photos = r.photos.filter((x) => x !== p); draw(); })));
-        if (r.photos.length < MAX_PHOTOS) {
-          const inp = h("input", { type: "file", accept: "image/*", multiple: true, hidden: true });
-          inp.addEventListener("change", async () => {
-            const files = [...inp.files].slice(0, MAX_PHOTOS - r.photos.length); inp.value = "";
-            errEl.textContent = "";
-            for (const f of files) {
-              st.uploading++; refreshTotals();
-              try { const path = await uploadPhoto(orderId, f); st.uploaded.push(path); r.photos.push(path); draw(); }
-              catch (x) { errEl.textContent = x.message; }
-              st.uploading--; refreshTotals();
-            }
-          });
-          strip.append(h("label", { class: "addphoto" }, inp, h("span", { "aria-hidden": "true", text: "📷" }), " Add photo"));
-        }
+        strip.hidden = !r.photos.length;
       };
       draw(); return strip;
     }
@@ -1150,7 +1138,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       const img = h("img", { alt: "Item photo" }); signedUrls([path]).then(([u]) => { if (u) img.src = u; });
       return h("button", { class: cls, type: "button", "aria-label": "View photo", onclick: () => openLightbox(path) }, img);
     };
-    const hero = h("div", { class: "pvhero" }, firstPhoto ? pic(firstPhoto) : h("div", { class: "ph" }, h("b", { text: "🖼" }), h("span", { text: items == null ? "Loading…" : "No photo yet" })));
+    const hero = firstPhoto ? h("div", { class: "pvhero" }, pic(firstPhoto)) : null;
     const tags = h("div", { class: "pvtags" }, h("span", { class: "pill " + (STATUS_CLASS[o.status] || "s-hold"), text: o.status }), o.company ? coPill(o.company) : null,
       h("span", { class: "pill " + (PAY_CLASS[o.paymentStatus] || ""), text: o.paymentStatus }), isOverdue(o) ? h("span", { class: "latetag", text: `Unpaid ${unpaidDays(o)} days` }) : null);
     let t = 0, any = false;
@@ -1159,12 +1147,12 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
         const q = Number(r.qty || 1), p = r.unit_price == null ? null : Number(r.unit_price), l = p == null ? null : q * p;
         if (l != null) { t += l; any = true; }
         const bits = [r.size, "×" + (Number.isInteger(q) ? q : q.toFixed(2)), p == null ? null : money(p)].filter(Boolean).join(" · ");
-        return h("div", { class: "pvitem" }, r.photos && r.photos.length ? pic(r.photos[0], "pic") : h("span", { class: "pic", "aria-hidden": "true", text: "▢" }),
+        return h("div", { class: "pvitem" + (r.photos && r.photos.length ? "" : " nopic") }, r.photos && r.photos.length ? pic(r.photos[0], "pic") : null,
           h("div", null, h("b", { text: r.description || "Untitled item" }), h("span", { class: "d", text: bits })), h("span", { class: "amt mono", text: money(l) }));
       }));
     const total = any ? Math.round(t * 100) / 100 : o.amount;
     const meta = [["Assignee", o.assignee ? nameOf(o.assignee) : "Unassigned"], ["Invoice No.", o.invoiceNo || "—"], ["Job Order No.", o.jobOrderNo || "—"], ["Address", o.address], ["Remarks", o.remarks]].filter(([, v]) => v);
-    box.replaceChildren(hero, tags, list, h("div", { class: "pvtotal" }, h("span", { text: "Total" }), h("span", { class: "itotal mono", text: money(total) })),
+    box.replaceChildren(...[hero].filter(Boolean), tags, list, h("div", { class: "pvtotal" }, h("span", { text: "Total" }), h("span", { class: "itotal mono", text: money(total) })),
       h("dl", { class: "pvmeta" }, meta.flatMap(([k, v]) => [h("dt", { text: k }), h("dd", { text: v })])));
   }
   function readForm() { const f = $("dBody").querySelector("[data-form]"); if (!f) return null; const o = {}; for (const [k] of EDIT_FIELDS) { const el = f.querySelector(`[name="${k}"]`); if (el) o[k] = el.value; } return o; }
