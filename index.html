@@ -154,6 +154,9 @@ tbody tr:hover td { background: var(--hover); }
 .s-jo { background: var(--st-jo-bg); color: var(--st-jo-fg); }
 .p-paid { background: var(--st-done-bg); color: var(--st-done-fg); }
 .p-partial { background: var(--st-pending-bg); color: var(--st-pending-fg); }
+.co { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.co-mirrora { background: var(--st-progress-bg); color: var(--st-progress-fg); }
+.co-cebu { background: var(--st-delivery-bg); color: var(--st-delivery-fg); }
 .paycell { display: grid; gap: 4px; justify-items: start; }
 .latetag { font-size: 12px; font-weight: 700; color: var(--st-cancel-fg); white-space: nowrap; }
 tbody tr.overdue td { background: color-mix(in srgb, var(--st-cancel-bg) 55%, var(--bg)); }
@@ -401,7 +404,7 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
       <div id="tableView">
         <div class="tablewrap">
           <table>
-            <thead><tr><th scope="col">Name</th><th scope="col">Order</th><th scope="col">Invoice No.</th><th scope="col">Job Order No.</th><th scope="col">Status</th><th scope="col">Payment</th><th scope="col">Remarks</th></tr></thead>
+            <thead><tr><th scope="col">Name</th><th scope="col">Company</th><th scope="col">Order</th><th scope="col">Invoice No.</th><th scope="col">Job Order No.</th><th scope="col">Status</th><th scope="col">Payment</th><th scope="col">Remarks</th></tr></thead>
             <tbody id="rows"></tbody>
           </table>
           <div class="empty" id="empty" hidden></div>
@@ -448,6 +451,8 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
   <form id="addForm" novalidate style="display:contents">
     <div class="win-body">
       <div class="field"><label for="aName">Name</label><input id="aName" autocomplete="off" maxlength="200" placeholder="Customer or company name"></div>
+      <div class="field"><label for="aCompany">Company</label>
+        <select id="aCompany"><option value="" selected disabled>Choose…</option><option>Mirrora</option><option>Cebu Mirrors</option></select></div>
       <div class="field"><label for="aPay">Payment status</label>
         <select id="aPay"><option value="" selected disabled>Choose…</option><option>Partial Payment</option><option>Fully Paid</option></select></div>
       <div class="field"><label for="aAddress">Address</label><textarea id="aAddress" placeholder="Delivery or site address"></textarea></div>
@@ -567,6 +572,9 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   const STATUS_CLASS = { "Pending": "s-pending", "For Invoice Creation": "s-progress", "For JO Creation": "s-jo", "For Delivery": "s-delivery", "Completed": "s-done", "Cancelled": "s-cancel" };
   const STATUS_DOT = { "Pending": "var(--st-pending-fg)", "For Invoice Creation": "var(--st-progress-fg)", "For JO Creation": "var(--st-jo-fg)", "For Delivery": "var(--st-delivery-fg)", "Completed": "var(--st-done-fg)", "Cancelled": "var(--st-cancel-fg)" };
   const PAYMENTS = ["Partial Payment", "Fully Paid"];
+  const COMPANIES = ["Mirrora", "Cebu Mirrors"];
+  const CO_CLASS = { "Mirrora": "co-mirrora", "Cebu Mirrors": "co-cebu" };
+  const coPill = (c) => c ? h("span", { class: "co " + (CO_CLASS[c] || ""), text: c }) : h("span", { class: "blank", text: "—" });
   const PAY_CLASS = { "Fully Paid": "p-paid", "Partial Payment": "p-partial" };
   const OVERDUE_MS = 3 * 24 * 60 * 60 * 1000;
   const unpaidDays = (o) => Math.floor((Date.now() - (o.paymentSince || o.createdAt || Date.now())) / 86400000);
@@ -720,7 +728,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     return { id: o.id, orderNo: o.order_no, name: o.name, items: o.items, address: o.address, amount: o.amount == null ? null : Number(o.amount),
       invoiceNo: o.invoice_no, jobOrderNo: o.job_order_no, status: o.status, remarks: o.remarks, assignee: o.assignee,
       createdBy: o.created_by, createdAt: ts(o.created_at), updatedBy: o.updated_by, updatedAt: ts(o.updated_at),
-      commentCount: o.comment_count, lastCommentAt: ts(o.last_comment_at), paymentStatus: o.payment_status || "Partial Payment", paymentSince: ts(o.payment_since) };
+      commentCount: o.comment_count, lastCommentAt: ts(o.last_comment_at), paymentStatus: o.payment_status || "Partial Payment", paymentSince: ts(o.payment_since), company: o.company || "" };
   }
   async function loadOrders() {
     const { data, error } = await sb.from("orders").select("*").order("created_at", { ascending: false }).limit(2000);
@@ -766,9 +774,9 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   const activeIds = () => Object.values(S.people).filter((p) => ACTIVE.includes(p.role) || p.email === OWNER_EMAIL.toLowerCase()).map((p) => p.id);
 
   /* ---------- views ---------- */
-  function inView(o) { if (S.view === "mine") return o.assignee === S.user.id; if (S.view === "pay:partial") return o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled"; if (S.view === "pay:overdue") return isOverdue(o); if (S.view.startsWith("st:")) return o.status === S.view.slice(3); return true; }
-  function filtered() { const q = S.q.trim().toLowerCase(); return S.orders.filter((o) => inView(o) && (!q || [o.name, o.orderNo, o.items, o.invoiceNo, o.jobOrderNo, o.remarks, o.address].some((v) => String(v || "").toLowerCase().includes(q)))); }
-  const viewTitle = () => S.view === "pay:partial" ? "Partial payment" : S.view === "pay:overdue" ? "Unpaid 3+ days" : S.view === "mine" ? "Assigned to me" : S.view.startsWith("st:") ? S.view.slice(3) : "All orders";
+  function inView(o) { if (S.view === "mine") return o.assignee === S.user.id; if (S.view.startsWith("co:")) return o.company === S.view.slice(3); if (S.view === "pay:partial") return o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled"; if (S.view === "pay:overdue") return isOverdue(o); if (S.view.startsWith("st:")) return o.status === S.view.slice(3); return true; }
+  function filtered() { const q = S.q.trim().toLowerCase(); return S.orders.filter((o) => inView(o) && (!q || [o.name, o.company, o.orderNo, o.items, o.invoiceNo, o.jobOrderNo, o.remarks, o.address].some((v) => String(v || "").toLowerCase().includes(q)))); }
+  const viewTitle = () => S.view.startsWith("co:") ? S.view.slice(3) : S.view === "pay:partial" ? "Partial payment" : S.view === "pay:overdue" ? "Unpaid 3+ days" : S.view === "mine" ? "Assigned to me" : S.view.startsWith("st:") ? S.view.slice(3) : "All orders";
 
   function paintNav() {
     const nav = $("nav"); nav.replaceChildren();
@@ -776,6 +784,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     for (const o of S.orders) { if (counts[o.status] != null) counts[o.status]++; if (o.assignee === S.user.id) mine++; }
     const btn = (v, icon, label, n) => h("button", { class: "navbtn", type: "button", "aria-current": S.view === v ? "true" : "false", onclick: () => { S.view = v; paint(); } }, icon, h("span", { class: "lab", text: label }), n != null ? h("span", { class: "n", text: String(n) }) : null);
     nav.append(btn("all", h("span", { class: "ic", text: "▤" }), "All orders", S.orders.length), btn("mine", h("span", { class: "ic", text: "@" }), "Assigned to me", mine),
+      ...COMPANIES.map((c) => btn("co:" + c, h("span", { class: "sd", style: `background:var(--st-${c === "Mirrora" ? "progress" : "delivery"}-fg)` }), c, S.orders.filter((o) => o.company === c).length)),
       h("div", { class: "navhead", text: "Status" }), ...STATUSES.map((s) => btn("st:" + s, h("span", { class: "sd", style: `background:${STATUS_DOT[s]}` }), s, counts[s])),
       h("div", { class: "navhead", text: "Payment" }),
       btn("pay:partial", h("span", { class: "sd", style: "background:var(--st-pending-fg)" }), "Partial payment", S.orders.filter((o) => o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled").length),
@@ -800,6 +809,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       const open = () => openDetail(o.id);
       tb.append(h("tr", { class: isOverdue(o) ? "overdue" : null },
         h("td", null, h("div", { class: "namecell" }, o.assignee ? ini(o.assignee) : null, h("button", { class: "link", type: "button", onclick: open, text: o.name || "Untitled" }))),
+        h("td", null, coPill(o.company)),
         h("td", { class: "ordercell" }, h("button", { class: "link mono", type: "button", onclick: open, text: o.orderNo || "—" }), threadInd(o), h("span", { class: "items", text: firstLine(o.items) })),
         h("td", null, blankOr(o.invoiceNo, true)), h("td", null, blankOr(o.jobOrderNo, true)),
         h("td", null, statusCell(o)),
@@ -839,6 +849,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       for (const o of items) {
         const card = h("div", { class: "card" + (isOverdue(o) ? " overdue" : ""), tabindex: "0", role: "button", "aria-label": `${o.name}, ${o.orderNo}`, draggable: can.edit() ? "true" : null, onclick: () => openDetail(o.id), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(o.id); } } },
           h("span", { class: "t", text: o.name || "Untitled" }),
+          o.company ? h("div", { class: "sub" }, coPill(o.company)) : null,
           h("div", { class: "sub" }, h("span", { class: "mono", text: o.orderNo || "" }), h("span", { class: "mono", text: fmtAmount(o.amount) })),
           h("div", { class: "sub" }, h("span", { class: "pill " + PAY_CLASS[o.paymentStatus], text: o.paymentStatus }), isOverdue(o) ? h("span", { class: "latetag", text: `Unpaid ${unpaidDays(o)} days` }) : null),
           (o.assignee || o.commentCount) ? h("div", { class: "sub" }, h("span", { style: "display:flex;align-items:center;gap:6px" }, o.assignee ? [ini(o.assignee), h("span", { text: nameOf(o.assignee) })] : null), o.commentCount ? h("span", { text: "💬 " + o.commentCount }) : null) : null);
@@ -890,7 +901,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   $("lyBoard").addEventListener("click", () => setLayout("board"));
   $("q").addEventListener("input", (e) => { S.q = e.target.value; paint(); });
   $("copyCsv").addEventListener("click", async () => {
-    const cols = [["Name", "name"], ["Order No.", "orderNo"], ["Items", "items"], ["Address", "address"], ["Amount", "amount"], ["Invoice No.", "invoiceNo"], ["Job Order No.", "jobOrderNo"], ["Status", "status"], ["Payment", "paymentStatus"], ["Assignee", "assignee"], ["Remarks", "remarks"], ["Created", "createdAt"]];
+    const cols = [["Name", "name"], ["Company", "company"], ["Order No.", "orderNo"], ["Items", "items"], ["Address", "address"], ["Amount", "amount"], ["Invoice No.", "invoiceNo"], ["Job Order No.", "jobOrderNo"], ["Status", "status"], ["Payment", "paymentStatus"], ["Assignee", "assignee"], ["Remarks", "remarks"], ["Created", "createdAt"]];
     const esc = (v) => { let s = String(v ?? ""); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const val = (o, k) => k === "assignee" ? (o.assignee ? nameOf(o.assignee) : "") : k === "createdAt" ? new Date(o.createdAt).toISOString() : o[k];
     const rows = [cols.map((c) => c[0]).join(",")].concat(filtered().map((o) => cols.map(([, k]) => esc(val(o, k))).join(",")));
@@ -1055,8 +1066,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   }
 
   /* ---------- order details ---------- */
-  const EDIT_FIELDS = [["name", "Name"], ["status", "Status"], ["paymentStatus", "Payment"], ["assignee", "Assignee"], ["invoiceNo", "Invoice No."], ["jobOrderNo", "Job Order No."], ["address", "Address"], ["remarks", "Remarks"]];
-  const COL = { name: "name", status: "status", paymentStatus: "payment_status", assignee: "assignee", invoiceNo: "invoice_no", jobOrderNo: "job_order_no", address: "address", remarks: "remarks" };
+  const EDIT_FIELDS = [["name", "Name"], ["company", "Company"], ["status", "Status"], ["paymentStatus", "Payment"], ["assignee", "Assignee"], ["invoiceNo", "Invoice No."], ["jobOrderNo", "Job Order No."], ["address", "Address"], ["remarks", "Remarks"]];
+  const COL = { name: "name", company: "company", status: "status", paymentStatus: "payment_status", assignee: "assignee", invoiceNo: "invoice_no", jobOrderNo: "job_order_no", address: "address", remarks: "remarks" };
   let snapshotVals = null, detailEd = null;
   function openDetail(id) {
     S.openId = id; snapshotVals = null; detailEd = null; S.comments = []; S.history = []; S.items = null;
@@ -1097,6 +1108,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       if (S.items != null) { detailEd = itemsEditor(o.id, S.items); itemsBox.append(detailEd.el, h("div", { class: "itotalrow" }, h("span", { text: "Total" }), detailEd.totalEl)); }
       body.append(h("div", { class: "grid2", "data-form": true },
         field("name", "Name", inp("name", { maxlength: "200" }), true),
+        field("company", "Company", h("select", { id: "d_company", name: "company" }, val("company") ? null : h("option", { value: "", selected: true, text: "Not set" }), COMPANIES.map((c) => h("option", { value: c, selected: val("company") === c, text: c })))),
         field("status", "Status", h("select", { id: "d_status", name: "status" }, STATUSES.map((s) => h("option", { value: s, selected: val("status") === s, text: s })))),
         field("paymentStatus", "Payment", h("select", { id: "d_paymentStatus", name: "paymentStatus" }, PAYMENTS.map((p) => h("option", { value: p, selected: val("paymentStatus") === p, text: p })))),
         field("assignee", "Assignee", h("select", { id: "d_assignee", name: "assignee" }, h("option", { value: "", text: "Unassigned" }), people.map((id) => h("option", { value: id, selected: val("assignee") === id, text: id === S.user.id ? `${nameOf(id)} (you)` : nameOf(id) })))),
@@ -1110,6 +1122,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       const ro = (label, node, full) => h("div", { class: "field" + (full ? " full" : "") }, h("span", { class: "k", text: label }), node);
       const txt = (v, mono) => v ? h("div", { class: "v" + (mono ? " mono" : ""), text: v }) : h("div", { class: "blank", text: "—" });
       body.append(h("div", { class: "grid2" },
+        ro("Company", h("div", null, coPill(o.company))),
         ro("Status", h("div", null, h("span", { class: "pill " + (STATUS_CLASS[o.status] || "s-hold"), text: o.status }))),
         ro("Payment", h("div", { class: "paycell" }, h("span", { class: "pill " + PAY_CLASS[o.paymentStatus], text: o.paymentStatus }), isOverdue(o) ? h("span", { class: "latetag", text: `Unpaid ${unpaidDays(o)} days` }) : null)),
         ro("Assignee", o.assignee ? h("div", { class: "namecell" }, ini(o.assignee), h("span", { text: nameOf(o.assignee) })) : txt("")),
@@ -1148,7 +1161,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     btn.disabled = true; btn.textContent = "Saving…";
     try {
       if (fChanged) {
-        const patch = {}; for (const [k] of EDIT_FIELDS) if (String(v[k]) !== String(snapshotVals[k])) patch[COL[k]] = k === "assignee" ? (v[k] || null) : v[k].trim();
+        const patch = {}; for (const [k] of EDIT_FIELDS) if (String(v[k]) !== String(snapshotVals[k])) patch[COL[k]] = (k === "assignee" || k === "company") ? (v[k] || null) : v[k].trim();
         await updateOrder(o.id, patch);
       }
       if (iChanged) {
@@ -1255,6 +1268,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     $("addForm").reset(); $("aErr").textContent = "";
     addId = crypto.randomUUID(); addEd = itemsEditor(addId, []);
     $("aItemsBox").replaceChildren(addEd.el); $("aTotal").replaceChildren(addEd.totalEl);
+    if (S.view.startsWith("co:")) $("aCompany").value = S.view.slice(3);
     openWin($("addWin")); setTimeout(() => $("aName").focus(), 30);
   }
   function discardAddUploads() { if (addEd) removePhotos(addEd.newUploads()); addEd = null; }
@@ -1263,6 +1277,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     e.preventDefault();
     const name = $("aName").value.trim(), address = $("aAddress").value.trim(), errEl = $("aErr"); errEl.textContent = "";
     if (!name) { errEl.textContent = "Enter a name."; $("aName").focus(); return; }
+    const company = $("aCompany").value; if (!COMPANIES.includes(company)) { errEl.textContent = "Choose which company this order is from."; $("aCompany").focus(); return; }
     const pay = $("aPay").value; if (!PAYMENTS.includes(pay)) { errEl.textContent = "Choose a payment status."; $("aPay").focus(); return; }
     const m = addEd.validate(); if (m) { errEl.textContent = m; return; }
     const btn = $("aSave"); btn.disabled = true; btn.textContent = "Adding…";
@@ -1270,7 +1285,9 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       p_status: S.view.startsWith("st:") ? S.view.slice(3) : "Pending", p_assignee: S.view === "mine" ? S.user.id : null, p_items: addEd.value(), p_payment: pay });
     btn.disabled = false; btn.textContent = "Add order";
     if (error) { errEl.textContent = dbMsg(error); return; }
-    addEd = null; closeWin($("addWin")); toast(`Added ${data}`); loadOrders();
+    const newId = addId; addEd = null; closeWin($("addWin")); toast(`Added ${data}`);
+    try { await updateOrder(newId, { company }); } catch (e2) { toast(`Added ${data}, but the company didn't save. Open the order and set it again.`); }
+    loadOrders();
   });
 
   /* ---------- team access ---------- */
