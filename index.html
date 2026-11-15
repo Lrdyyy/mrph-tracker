@@ -129,7 +129,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn.danger.armed { background: var(--danger); color: #fff; }
 .btn[disabled] { opacity: .55; cursor: default; }
 
-.content { flex: 1; overflow: auto; padding: 16px 20px 110px; display: grid; align-content: start; gap: 12px; }
+.content { flex: 1; min-width: 0; overflow: auto; padding: 16px 20px 110px; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 12px; }
+#tableView, .tablewrap, #updatesView { min-width: 0; }
+.tablewrap { -webkit-overflow-scrolling: touch; }
 .notice { padding: 9px 14px; border-radius: 8px; background: var(--panel); border-left: 4px solid var(--link); font-size: 14px; }
 .notice.warn { border-left-color: var(--st-pending-fg); }
 
@@ -292,7 +294,9 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 60; padding: 10px 16px; border-radius: 8px; background: var(--ink); color: var(--bg); font-size: 14px; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
 
 @media (max-width: 760px) {
-  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .side { min-width: 0; }
+  .nav { min-width: 0; max-width: 100%; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
   .side { flex-direction: row; flex-wrap: wrap; align-items: center; }
   .ws { border-bottom: 0; padding: 10px 14px; }
   .nav { flex: 1 1 100%; order: 3; display: flex; overflow-x: auto; padding: 0 8px 8px; gap: 4px; }
@@ -368,7 +372,13 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 .lastupd:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 4px; }
 .bltoggle { border: 1px solid var(--line); background: var(--bg); color: var(--muted); padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .bltoggle:hover { border-color: var(--link); color: var(--ink); }
-.bltoggle.on { background: var(--st-prod-bg); color: var(--st-prod-fg); border-color: transparent; }
+.blbox { display: grid; gap: 8px; }
+.blhead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+.blhead b { color: var(--st-prod-fg); background: var(--st-prod-bg); padding: 2px 10px; border-radius: 999px; }
+.blhead .textlink { margin-left: auto; font-size: 13px; }
+.blcl { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 700; }
+.blcount { padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.blcolors { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .bl { display: inline-block; margin-left: 8px; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--st-prod-bg); color: var(--st-prod-fg); }
 .updlist { border: 1px solid var(--line); border-radius: 10px; padding: 6px; display: grid; gap: 2px; }
 .updlist .msg { cursor: pointer; }
@@ -561,6 +571,7 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
   </div>
 </section>
 
+<datalist id="blSuggest"><option value="Warm White"><option value="Cool White"><option value="Neutral White"><option value="Red"><option value="Green"><option value="Blue"><option value="Yellow"><option value="Pink"><option value="Purple"><option value="RGB"></datalist>
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="config.js"></script>
@@ -955,13 +966,19 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     }
   }
   async function saveSizes(orderId, sizes, flags) {
-    let { data, error } = await sb.from("order_items").select("position,size,backlights").eq("order_id", orderId).order("position");
-    const hasBl = !error;
-    if (error) { ({ data, error } = await sb.from("order_items").select("position,size").eq("order_id", orderId).order("position")); if (error) throw error; }
+    let hasBl = true, hasCol = true;
+    const pick = (cols) => sb.from("order_items").select(cols).eq("order_id", orderId).order("position");
+    let { data, error } = await pick("position,size,backlights,backlight_colors");
+    if (error) { hasCol = false; ({ data, error } = await pick("position,size,backlights")); }
+    if (error) { hasBl = false; ({ data, error } = await pick("position,size")); if (error) throw error; }
     for (let i = 0; i < (data || []).length; i++) {
       const patch = {}; const want = sizes[i] || null;
       if ((data[i].size || null) !== want) patch.size = want;
-      if (hasBl && flags && !!data[i].backlights !== !!flags[i]) patch.backlights = !!flags[i];
+      if (hasBl && flags) {
+        const f = flags[i] || { on: false, colors: [] };
+        if (!!data[i].backlights !== f.on) patch.backlights = f.on;
+        if (hasCol && JSON.stringify(data[i].backlight_colors || []) !== JSON.stringify(f.colors)) patch.backlight_colors = f.colors;
+      }
       if (!Object.keys(patch).length) continue;
       const { data: d2, error: e2 } = await sb.from("order_items").update(patch).eq("order_id", orderId).eq("position", data[i].position).select("position");
       if (e2) throw e2; if (!d2 || !d2.length) throw REFUSED;
@@ -1090,7 +1107,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   const money = (n) => (typeof n === "number" && isFinite(n)) ? peso.format(n) : "—";
   function itemsEditor(orderId, items) {
     const st = { rows: [], uploading: 0, uploaded: [] };
-    const toRow = (r) => ({ key: crypto.randomUUID(), description: r.description || "", size: r.size || "", backlights: !!r.backlights, qty: r.qty == null ? "1" : String(Number(r.qty)), price: r.unit_price == null ? "" : String(Number(r.unit_price)), photos: [...(r.photos || [])] });
+    const toRow = (r) => ({ key: crypto.randomUUID(), description: r.description || "", size: r.size || "", backlights: !!r.backlights, colors: r.backlights ? ((r.backlight_colors && r.backlight_colors.length) ? [...r.backlight_colors] : [""]) : [], qty: r.qty == null ? "1" : String(Number(r.qty)), price: r.unit_price == null ? "" : String(Number(r.unit_price)), photos: [...(r.photos || [])] });
     st.rows = (items && items.length ? items : [{}]).map(toRow);
     const list = h("div", { class: "irows" });
     const totalEl = h("span", { class: "itotal mono" });
@@ -1111,6 +1128,17 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       };
       draw(); return strip;
     }
+    function backlightBox(r) {
+      const box = h("div", { class: "blbox" });
+      const draw = () => {
+        if (!r.backlights) { box.replaceChildren(h("button", { class: "bltoggle", type: "button", text: "+ Add Backlights", onclick: () => { r.backlights = true; if (!r.colors.length) r.colors = [""]; draw(); } })); return; }
+        const count = h("select", { class: "blcount", "aria-label": "Number of backlight colors" }, [1, 2, 3, 4, 5, 6].map((n) => h("option", { value: String(n), selected: r.colors.length === n, text: String(n) })));
+        count.addEventListener("change", () => { const n = Number(count.value); r.colors = Array.from({ length: n }, (_, i) => r.colors[i] || ""); draw(); });
+        const inputs = r.colors.map((c, i) => { const inp = h("input", { value: c, maxlength: "40", list: "blSuggest", placeholder: `Color ${i + 1}, e.g. Warm White`, "aria-label": `Backlight color ${i + 1}` }); inp.addEventListener("input", () => { r.colors[i] = inp.value; }); return inp; });
+        box.replaceChildren(h("div", { class: "blhead" }, h("b", { text: "Backlights" }), h("label", { class: "blcl" }, "Colors", count), h("button", { class: "textlink", type: "button", text: "Remove", onclick: () => { r.backlights = false; r.colors = []; draw(); } })), h("div", { class: "blcolors" }, inputs));
+      };
+      draw(); return box;
+    }
     function render() {
       list.replaceChildren(...st.rows.map((r, i) => {
         const desc = h("input", { class: "idesc", value: r.description, maxlength: "300", placeholder: "Item description, e.g. Arch mirror, black frame", "aria-label": `Item ${i + 1}` });
@@ -1123,11 +1151,9 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
         price.addEventListener("input", () => { r.price = price.value; refreshTotals(); });
         const rm = h("button", { class: "x sm", type: "button", "aria-label": `Remove item ${i + 1}`, text: "×", disabled: st.rows.length === 1 ? true : null,
           onclick: () => { st.rows = st.rows.filter((x) => x !== r); render(); } });
-        const bl = h("button", { class: "bltoggle" + (r.backlights ? " on" : ""), type: "button", "aria-pressed": String(r.backlights), text: (r.backlights ? "✓ " : "") + "With Backlights" });
-        bl.addEventListener("click", () => { r.backlights = !r.backlights; bl.classList.toggle("on", r.backlights); bl.setAttribute("aria-pressed", String(r.backlights)); bl.textContent = (r.backlights ? "✓ " : "") + "With Backlights"; });
         return h("div", { class: "irow" },
           h("div", { class: "ifields" }, desc, size, qty, h("div", { class: "iprice" }, h("span", { text: "₱" }), price), h("span", { class: "iline mono", "data-ltotal": r.key }), rm),
-          h("div", null, bl),
+          backlightBox(r),
           photoStrip(r));
       }));
       refreshTotals();
@@ -1148,7 +1174,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       newUploads: () => st.uploaded.slice(),
       allPhotos: () => st.rows.flatMap((r) => r.photos),
       sizes: () => st.rows.map((r) => r.size.trim().slice(0, 80)),
-      flags: () => st.rows.map((r) => !!r.backlights),
+      flags: () => st.rows.map((r) => ({ on: !!r.backlights, colors: r.backlights ? r.colors.map((c) => c.trim().slice(0, 40)) : [] })),
       validate() {
         const bad = st.rows.findIndex((r) => !r.description.trim());
         if (bad >= 0) return `Item ${bad + 1} needs a description.`;
@@ -1160,13 +1186,17 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       value: () => st.rows.map((r) => ({ description: r.description.trim(), qty: r.qty === "" ? 1 : Number(r.qty), unit_price: r.price === "" ? null : Math.round(Number(r.price) * 100) / 100, photos: r.photos }))
     };
   }
+  function blText(r) {
+    const c = (r.backlight_colors || []).filter(Boolean);
+    return c.length ? "Backlights: " + c.join(", ") : (r.backlight_colors && r.backlight_colors.length > 1) ? `Backlights ×${r.backlight_colors.length}` : "Backlights";
+  }
   function itemsView(items) {
     if (!items.length) return h("div", { class: "blank", text: "No items listed." });
     let t = 0, any = false;
     const rows = items.map((r) => {
       const q = Number(r.qty), p = r.unit_price == null ? null : Number(r.unit_price); const l = p == null ? null : q * p; if (l != null) { t += l; any = true; }
       return h("div", { class: "irow ro" },
-        h("div", { class: "ifields" }, h("span", { class: "idesc v" }, r.description, r.backlights ? h("span", { class: "bl" , text: "With Backlights" }) : null), h("span", { class: "isize" + (r.size ? " v" : " blank"), text: r.size || "—" }), h("span", { class: "iqty mono", text: "×" + (Number.isInteger(q) ? q : q.toFixed(2)) }),
+        h("div", { class: "ifields" }, h("span", { class: "idesc v" }, r.description, r.backlights ? h("span", { class: "bl", text: blText(r) }) : null), h("span", { class: "isize" + (r.size ? " v" : " blank"), text: r.size || "—" }), h("span", { class: "iqty mono", text: "×" + (Number.isInteger(q) ? q : q.toFixed(2)) }),
           h("span", { class: "iprice mono", text: money(p) }), h("span", { class: "iline mono", text: money(l) }), h("span")),
         r.photos && r.photos.length ? h("div", { class: "iphotos" }, r.photos.map((p2) => thumb(p2))) : null);
     });
@@ -1185,7 +1215,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   }
   async function loadItems() {
     const id = S.openId; if (!id) return;
-    let { data, error } = await sb.from("order_items").select("description,size,backlights,qty,unit_price,photos,position").eq("order_id", id).order("position");
+    let { data, error } = await sb.from("order_items").select("description,size,backlights,backlight_colors,qty,unit_price,photos,position").eq("order_id", id).order("position");
+    if (error) ({ data, error } = await sb.from("order_items").select("description,size,backlights,qty,unit_price,photos,position").eq("order_id", id).order("position"));
     if (error) ({ data, error } = await sb.from("order_items").select("description,size,qty,unit_price,photos,position").eq("order_id", id).order("position"));
     if (S.openId !== id) return;
     S.items = error ? [] : (data || []);
@@ -1213,7 +1244,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       h("div", { class: "pvitems" }, items.map((r) => {
         const q = Number(r.qty || 1), p = r.unit_price == null ? null : Number(r.unit_price), l = p == null ? null : q * p;
         if (l != null) { t += l; any = true; }
-        const bits = [r.size, r.backlights ? "With Backlights" : null, "×" + (Number.isInteger(q) ? q : q.toFixed(2)), p == null ? null : money(p)].filter(Boolean).join(" · ");
+        const bits = [r.size, r.backlights ? blText(r) : null, "×" + (Number.isInteger(q) ? q : q.toFixed(2)), p == null ? null : money(p)].filter(Boolean).join(" · ");
         return h("div", { class: "pvitem" + (r.photos && r.photos.length ? "" : " nopic") }, r.photos && r.photos.length ? pic(r.photos[0], "pic") : null,
           h("div", null, h("b", { text: r.description || "Untitled item" }), h("span", { class: "d", text: bits })), h("span", { class: "amt mono", text: money(l) }));
       }));
@@ -1497,7 +1528,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     if (error) { errEl.textContent = dbMsg(error); return; }
     const newId = addId, sizes = addEd.sizes(), flags = addEd.flags(); addEd = null; closeWin($("addWin")); toast(`Added ${data}`);
     try { await updateOrder(newId, { company }); } catch (e2) { toast(`Added ${data}, but the company didn't save. Open the order and set it again.`); }
-    if (sizes.some(Boolean) || flags.some(Boolean)) { try { await saveSizes(newId, sizes, flags); } catch (e3) { toast(`Added ${data}, but the item sizes didn't save. Open the order and set them again.`); } }
+    if (sizes.some(Boolean) || flags.some((f) => f.on)) { try { await saveSizes(newId, sizes, flags); } catch (e3) { toast(`Added ${data}, but the item sizes didn't save. Open the order and set them again.`); } }
     loadOrders();
   });
 
