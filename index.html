@@ -212,8 +212,11 @@ select.pill option { background: var(--bg); color: var(--ink); }
 .split > .pane + .pane { border-left: 1px solid var(--line); background: var(--panel); }
 @media (max-width: 760px) {
   .win.xl { height: calc(100% - 24px); }
-  .split { grid-template-columns: 1fr; overflow-y: auto; }
-  .split > .pane + .pane { border-left: 0; border-top: 1px solid var(--line); min-height: 360px; }
+  .split { display: block; overflow-y: auto; overscroll-behavior: contain; }
+  .split > .pane { display: block; min-height: 0; }
+  .split > .pane > .win-body { overflow: visible; }
+  .split > .pane + .pane { border-left: 0; border-top: 1px solid var(--line); }
+  .split .tpane { display: flex; height: 340px; flex: none; }
 }
 .preview { flex: 0 1 auto; max-height: 54%; overflow-y: auto; padding: 14px 16px; display: grid; gap: 12px; align-content: start; background: var(--bg); border-bottom: 1px solid var(--line); }
 .pvhero { height: 130px; border-radius: 10px; overflow: hidden; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); font-size: 13px; }
@@ -361,6 +364,10 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 .lastupd .um { font-size: 12px; color: var(--muted); }
 .lastupd:hover .ub { color: var(--link); }
 .lastupd:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 4px; }
+.bltoggle { border: 1px solid var(--line); background: var(--bg); color: var(--muted); padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.bltoggle:hover { border-color: var(--link); color: var(--ink); }
+.bltoggle.on { background: var(--st-prod-bg); color: var(--st-prod-fg); border-color: transparent; }
+.bl { display: inline-block; margin-left: 8px; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--st-prod-bg); color: var(--st-prod-fg); }
 .updlist { border: 1px solid var(--line); border-radius: 10px; padding: 6px; display: grid; gap: 2px; }
 .updlist .msg { cursor: pointer; }
 .updlist .hd { flex-wrap: wrap; }
@@ -945,12 +952,16 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       b.append(col);
     }
   }
-  async function saveSizes(orderId, sizes) {
-    const { data, error } = await sb.from("order_items").select("position,size").eq("order_id", orderId).order("position");
-    if (error) throw error;
+  async function saveSizes(orderId, sizes, flags) {
+    let { data, error } = await sb.from("order_items").select("position,size,backlights").eq("order_id", orderId).order("position");
+    const hasBl = !error;
+    if (error) { ({ data, error } = await sb.from("order_items").select("position,size").eq("order_id", orderId).order("position")); if (error) throw error; }
     for (let i = 0; i < (data || []).length; i++) {
-      const want = sizes[i] || null; if ((data[i].size || null) === want) continue;
-      const { data: d2, error: e2 } = await sb.from("order_items").update({ size: want }).eq("order_id", orderId).eq("position", data[i].position).select("position");
+      const patch = {}; const want = sizes[i] || null;
+      if ((data[i].size || null) !== want) patch.size = want;
+      if (hasBl && flags && !!data[i].backlights !== !!flags[i]) patch.backlights = !!flags[i];
+      if (!Object.keys(patch).length) continue;
+      const { data: d2, error: e2 } = await sb.from("order_items").update(patch).eq("order_id", orderId).eq("position", data[i].position).select("position");
       if (e2) throw e2; if (!d2 || !d2.length) throw REFUSED;
     }
   }
@@ -1077,7 +1088,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   const money = (n) => (typeof n === "number" && isFinite(n)) ? peso.format(n) : "—";
   function itemsEditor(orderId, items) {
     const st = { rows: [], uploading: 0, uploaded: [] };
-    const toRow = (r) => ({ key: crypto.randomUUID(), description: r.description || "", size: r.size || "", qty: r.qty == null ? "1" : String(Number(r.qty)), price: r.unit_price == null ? "" : String(Number(r.unit_price)), photos: [...(r.photos || [])] });
+    const toRow = (r) => ({ key: crypto.randomUUID(), description: r.description || "", size: r.size || "", backlights: !!r.backlights, qty: r.qty == null ? "1" : String(Number(r.qty)), price: r.unit_price == null ? "" : String(Number(r.unit_price)), photos: [...(r.photos || [])] });
     st.rows = (items && items.length ? items : [{}]).map(toRow);
     const list = h("div", { class: "irows" });
     const totalEl = h("span", { class: "itotal mono" });
@@ -1110,8 +1121,11 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
         price.addEventListener("input", () => { r.price = price.value; refreshTotals(); });
         const rm = h("button", { class: "x sm", type: "button", "aria-label": `Remove item ${i + 1}`, text: "×", disabled: st.rows.length === 1 ? true : null,
           onclick: () => { st.rows = st.rows.filter((x) => x !== r); render(); } });
+        const bl = h("button", { class: "bltoggle" + (r.backlights ? " on" : ""), type: "button", "aria-pressed": String(r.backlights), text: (r.backlights ? "✓ " : "") + "With Backlights" });
+        bl.addEventListener("click", () => { r.backlights = !r.backlights; bl.classList.toggle("on", r.backlights); bl.setAttribute("aria-pressed", String(r.backlights)); bl.textContent = (r.backlights ? "✓ " : "") + "With Backlights"; });
         return h("div", { class: "irow" },
           h("div", { class: "ifields" }, desc, size, qty, h("div", { class: "iprice" }, h("span", { text: "₱" }), price), h("span", { class: "iline mono", "data-ltotal": r.key }), rm),
+          h("div", null, bl),
           photoStrip(r));
       }));
       refreshTotals();
@@ -1132,6 +1146,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       newUploads: () => st.uploaded.slice(),
       allPhotos: () => st.rows.flatMap((r) => r.photos),
       sizes: () => st.rows.map((r) => r.size.trim().slice(0, 80)),
+      flags: () => st.rows.map((r) => !!r.backlights),
       validate() {
         const bad = st.rows.findIndex((r) => !r.description.trim());
         if (bad >= 0) return `Item ${bad + 1} needs a description.`;
@@ -1149,7 +1164,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     const rows = items.map((r) => {
       const q = Number(r.qty), p = r.unit_price == null ? null : Number(r.unit_price); const l = p == null ? null : q * p; if (l != null) { t += l; any = true; }
       return h("div", { class: "irow ro" },
-        h("div", { class: "ifields" }, h("span", { class: "idesc v", text: r.description }), h("span", { class: "isize" + (r.size ? " v" : " blank"), text: r.size || "—" }), h("span", { class: "iqty mono", text: "×" + (Number.isInteger(q) ? q : q.toFixed(2)) }),
+        h("div", { class: "ifields" }, h("span", { class: "idesc v" }, r.description, r.backlights ? h("span", { class: "bl" , text: "With Backlights" }) : null), h("span", { class: "isize" + (r.size ? " v" : " blank"), text: r.size || "—" }), h("span", { class: "iqty mono", text: "×" + (Number.isInteger(q) ? q : q.toFixed(2)) }),
           h("span", { class: "iprice mono", text: money(p) }), h("span", { class: "iline mono", text: money(l) }), h("span")),
         r.photos && r.photos.length ? h("div", { class: "iphotos" }, r.photos.map((p2) => thumb(p2))) : null);
     });
@@ -1168,7 +1183,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   }
   async function loadItems() {
     const id = S.openId; if (!id) return;
-    const { data, error } = await sb.from("order_items").select("description,size,qty,unit_price,photos,position").eq("order_id", id).order("position");
+    let { data, error } = await sb.from("order_items").select("description,size,backlights,qty,unit_price,photos,position").eq("order_id", id).order("position");
+    if (error) ({ data, error } = await sb.from("order_items").select("description,size,qty,unit_price,photos,position").eq("order_id", id).order("position"));
     if (S.openId !== id) return;
     S.items = error ? [] : (data || []);
     if (!detailDirty()) paintDetail(); else paintPreview();
@@ -1195,7 +1211,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       h("div", { class: "pvitems" }, items.map((r) => {
         const q = Number(r.qty || 1), p = r.unit_price == null ? null : Number(r.unit_price), l = p == null ? null : q * p;
         if (l != null) { t += l; any = true; }
-        const bits = [r.size, "×" + (Number.isInteger(q) ? q : q.toFixed(2)), p == null ? null : money(p)].filter(Boolean).join(" · ");
+        const bits = [r.size, r.backlights ? "With Backlights" : null, "×" + (Number.isInteger(q) ? q : q.toFixed(2)), p == null ? null : money(p)].filter(Boolean).join(" · ");
         return h("div", { class: "pvitem" + (r.photos && r.photos.length ? "" : " nopic") }, r.photos && r.photos.length ? pic(r.photos[0], "pic") : null,
           h("div", null, h("b", { text: r.description || "Untitled item" }), h("span", { class: "d", text: bits })), h("span", { class: "amt mono", text: money(l) }));
       }));
@@ -1287,7 +1303,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       if (iChanged) {
         const { error } = await sb.rpc("save_order_items", { p_order: o.id, p_items: detailEd.value() });
         if (error) throw error;
-        await saveSizes(o.id, detailEd.sizes());
+        await saveSizes(o.id, detailEd.sizes(), detailEd.flags());
         const keep = new Set(detailEd.allPhotos());
         removePhotos([...(S.items || []).flatMap((r) => r.photos || []), ...detailEd.newUploads()].filter((p) => !keep.has(p)));
       }
@@ -1477,9 +1493,9 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       p_status: S.view.startsWith("st:") ? S.view.slice(3) : "Pending", p_assignee: S.view === "mine" ? S.user.id : null, p_items: addEd.value(), p_payment: pay });
     btn.disabled = false; btn.textContent = "Add order";
     if (error) { errEl.textContent = dbMsg(error); return; }
-    const newId = addId, sizes = addEd.sizes(); addEd = null; closeWin($("addWin")); toast(`Added ${data}`);
+    const newId = addId, sizes = addEd.sizes(), flags = addEd.flags(); addEd = null; closeWin($("addWin")); toast(`Added ${data}`);
     try { await updateOrder(newId, { company }); } catch (e2) { toast(`Added ${data}, but the company didn't save. Open the order and set it again.`); }
-    if (sizes.some(Boolean)) { try { await saveSizes(newId, sizes); } catch (e3) { toast(`Added ${data}, but the item sizes didn't save. Open the order and set them again.`); } }
+    if (sizes.some(Boolean) || flags.some(Boolean)) { try { await saveSizes(newId, sizes, flags); } catch (e3) { toast(`Added ${data}, but the item sizes didn't save. Open the order and set them again.`); } }
     loadOrders();
   });
 
