@@ -134,7 +134,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .notice.warn { border-left-color: var(--st-pending-fg); }
 
 .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
-table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+table { width: 100%; border-collapse: collapse; min-width: 1240px; }
 th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-size: 13px; font-weight: 700; color: var(--muted); background: var(--panel); white-space: nowrap; }
 tbody tr:last-child td { border-bottom: 0; }
@@ -356,6 +356,11 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 .ptab:hover { color: var(--ink); }
 .ptab[aria-pressed="true"] { background: var(--bg); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
 .tpane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.lastupd { all: unset; cursor: pointer; display: grid; gap: 2px; max-width: 240px; }
+.lastupd .ub { font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.lastupd .um { font-size: 12px; color: var(--muted); }
+.lastupd:hover .ub { color: var(--link); }
+.lastupd:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 4px; }
 .updlist { border: 1px solid var(--line); border-radius: 10px; padding: 6px; display: grid; gap: 2px; }
 .updlist .msg { cursor: pointer; }
 .updlist .hd { flex-wrap: wrap; }
@@ -448,7 +453,7 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
       <div id="tableView">
         <div class="tablewrap">
           <table>
-            <thead><tr><th scope="col">Name</th><th scope="col">Company</th><th scope="col">Order</th><th scope="col">Invoice No.</th><th scope="col">Job Order No.</th><th scope="col">Status</th><th scope="col">Payment</th><th scope="col">Remarks</th></tr></thead>
+            <thead><tr><th scope="col">Name</th><th scope="col">Company</th><th scope="col">Order</th><th scope="col">Invoice No.</th><th scope="col">Job Order No.</th><th scope="col">Status</th><th scope="col">Updates</th><th scope="col">Payment</th><th scope="col">Remarks</th></tr></thead>
             <tbody id="rows"></tbody>
           </table>
           <div class="empty" id="empty" hidden></div>
@@ -873,6 +878,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   const threadInd = (o) => o.commentCount ? h("span", { class: "thread-ind", title: "Comments", text: "💬 " + o.commentCount }) : null;
   function paintTable(list) {
     const tb = $("rows"); tb.replaceChildren();
+    const latest = new Map(); for (const u of S.updates) if (!latest.has(u.order_id)) latest.set(u.order_id, u);
     for (const o of list) {
       const open = () => openDetail(o.id);
       tb.append(h("tr", { class: "clickrow" + (isOverdue(o) ? " overdue" : ""), onclick: (e) => { if (!e.target.closest("button, select, a, input, textarea")) open(); } },
@@ -881,9 +887,16 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
         h("td", { class: "ordercell" }, h("button", { class: "link mono", type: "button", onclick: open, text: o.orderNo || "—" }), threadInd(o), h("span", { class: "items", text: firstLine(o.items) })),
         h("td", null, blankOr(o.invoiceNo, true)), h("td", null, blankOr(o.jobOrderNo, true)),
         h("td", null, statusCell(o)),
+        h("td", null, updateCell(o, latest.get(o.id))),
         h("td", null, payCell(o)),
         h("td", null, o.remarks ? h("div", { class: "remarks", text: o.remarks }) : h("span", { class: "blank", text: "—" }))));
     }
+  }
+  function updateCell(o, u) {
+    if (!u) return h("span", { class: "blank", text: "—" });
+    const ts = Date.parse(u.created_at);
+    return h("button", { class: "lastupd", type: "button", title: "Open updates", onclick: () => openDetail(o.id, "updates") },
+      h("span", { class: "ub", text: u.body }), h("span", { class: "um", text: `${nameOf(u.author)} · ${dshort.format(new Date(ts))}` }));
   }
   function statusCell(o) {
     if (!can.edit()) return h("span", { class: "pill " + (STATUS_CLASS[o.status] || "s-hold"), text: o.status });
@@ -1373,9 +1386,9 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   /* ---------- updates ---------- */
   const missingTable = (e) => !!e && (e.code === "42P01" || e.code === "PGRST205" || /does not exist|schema cache/i.test(String(e.message || "")));
   async function loadFeed() {
-    const { data, error } = await sb.from("order_updates").select("id,order_id,author,body,created_at").order("created_at", { ascending: false }).limit(200);
+    const { data, error } = await sb.from("order_updates").select("id,order_id,author,body,created_at").order("created_at", { ascending: false }).limit(1000);
     if (error) { S.updatesOff = missingTable(error); S.updates = []; } else { S.updatesOff = false; S.updates = data || []; }
-    S.updatesLoaded = true; if (S.view === "updates") paint();
+    S.updatesLoaded = true; paint();
   }
   async function loadOrderUpdates() {
     const id = S.openId; if (!id) return;
