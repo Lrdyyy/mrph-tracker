@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover">
 <title>MRPH Order Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -46,7 +46,7 @@
   }
 }
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
+html, body { height: 100%; margin: 0; overflow-x: hidden; }
 body { background: var(--bg); color: var(--ink); font: 15px/1.46 var(--font-body); }
 button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
@@ -211,7 +211,9 @@ select.pill option { background: var(--bg); color: var(--ink); }
 .split > .pane { min-height: 0; display: flex; flex-direction: column; }
 .split > .pane + .pane { border-left: 1px solid var(--line); background: var(--panel); }
 @media (max-width: 760px) {
-  .win.xl { height: calc(100% - 24px); }
+  .win, .win.lg, .win.xl { left: 0; right: 0; top: auto; bottom: 0; transform: none; width: 100%; max-width: 100%; max-height: 92vh; max-height: 92dvh; border-radius: 14px 14px 0 0; border-left: 0; border-right: 0; border-bottom: 0; }
+  .win.xl { top: 0; height: 100vh; height: 100dvh; max-height: none; border-radius: 0; border-top: 0; }
+  .win-head { cursor: default; touch-action: auto; }
   .split { display: block; overflow-y: auto; overscroll-behavior: contain; }
   .split > .pane { display: block; min-height: 0; }
   .split > .pane > .win-body { overflow: visible; }
@@ -1031,7 +1033,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; if (!$("lightbox").hidden) { $("lightbox").hidden = true; return; } if (!$("picker").hidden) { $("picker").hidden = true; return; } if (stack.length) closeWin(stack[stack.length - 1]); });
   document.querySelectorAll("[data-drag]").forEach((head) => {
     head.addEventListener("pointerdown", (e) => {
-      if (e.target.closest("button")) return;
+      if (e.target.closest("button") || window.innerWidth <= 760) return;
       const win = head.closest(".win"); const r = win.getBoundingClientRect();
       win.style.transform = "none"; win.style.left = r.left + "px"; win.style.top = r.top + "px";
       const dx = e.clientX - r.left, dy = e.clientY - r.top; head.setPointerCapture(e.pointerId);
