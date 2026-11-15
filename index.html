@@ -351,6 +351,15 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
   .ifields .idesc, .ifields .isize { grid-column: 1 / -1; }
   .irow.ro .ifields > span:last-child { display: none; }
 }
+.ptabs { display: flex; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.ptab { border: 0; background: transparent; padding: 5px 11px; border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--muted); }
+.ptab:hover { color: var(--ink); }
+.ptab[aria-pressed="true"] { background: var(--bg); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+.tpane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.updlist { border: 1px solid var(--line); border-radius: 10px; padding: 6px; display: grid; gap: 2px; }
+.updlist .msg { cursor: pointer; }
+.updlist .hd { flex-wrap: wrap; }
+.updlist .hd .meta { font-size: 13px; }
 </style>
 </head>
 <body>
@@ -447,6 +456,7 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
         </div>
       </div>
       <div class="board" id="boardView" hidden></div>
+      <div id="updatesView" hidden></div>
     </div>
   </div>
 </div>
@@ -467,14 +477,28 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
     <div class="pane">
       <div class="panehead">Preview</div>
       <div class="preview" id="preview" aria-live="polite"></div>
-      <div class="panehead" id="tHead">Thread</div>
-      <div class="msgs" id="msgs"></div>
-      <div class="composer" id="composer">
-        <div class="picker" id="picker" role="listbox" hidden></div>
-        <label for="cText" style="position:absolute;left:-9999px">Reply</label>
-        <textarea id="cText" placeholder="Reply… type @ to mention a teammate"></textarea>
-        <div class="row"><span class="meta">Enter to send · Shift+Enter for a new line</span><button class="btn go" type="button" id="cSend">Send</button></div>
-        <div class="err" id="cErr" role="alert"></div>
+      <div class="ptabs" role="group" aria-label="Thread or updates">
+        <button class="ptab" type="button" id="tHead" aria-pressed="true">Thread</button>
+        <button class="ptab" type="button" id="uHead" aria-pressed="false">Updates</button>
+      </div>
+      <div class="tpane" id="threadPane">
+        <div class="msgs" id="msgs"></div>
+        <div class="composer" id="composer">
+          <div class="picker" id="picker" role="listbox" hidden></div>
+          <label for="cText" style="position:absolute;left:-9999px">Reply</label>
+          <textarea id="cText" placeholder="Reply… type @ to mention a teammate"></textarea>
+          <div class="row"><span class="meta">Enter to send · Shift+Enter for a new line</span><button class="btn go" type="button" id="cSend">Send</button></div>
+          <div class="err" id="cErr" role="alert"></div>
+        </div>
+      </div>
+      <div class="tpane" id="updatesPane" hidden>
+        <div class="msgs" id="uMsgs"></div>
+        <div class="composer" id="uComposer">
+          <label for="uText" style="position:absolute;left:-9999px">Update</label>
+          <textarea id="uText" placeholder="Post an update, e.g. Glass cut, now polishing"></textarea>
+          <div class="row"><span class="meta">Enter to post · Shift+Enter for a new line</span><button class="btn go" type="button" id="uSend">Post update</button></div>
+          <div class="err" id="uErr" role="alert"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -615,6 +639,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   const PAY_CLASS = { "Fully Paid": "p-paid", "Partial Payment": "p-partial" };
   const OVERDUE_MS = 3 * 24 * 60 * 60 * 1000;
   const unpaidDays = (o) => Math.floor((Date.now() - (o.paymentSince || o.createdAt || Date.now())) / 86400000);
+  const isDone = (o) => o.status === "Completed";
   const isOverdue = (o) => o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled" && Date.now() - (o.paymentSince || o.createdAt || Date.now()) > OVERDUE_MS;
   const ROLE_LABEL = { pending: "Waiting", viewer: "Viewer", editor: "Editor", admin: "Admin", disabled: "Removed" };
   const ACTIVE = ["viewer", "editor", "admin"];
@@ -623,7 +648,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   const dshort = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
   const S = { user: null, me: null, role: "none", isOwner: false, people: {}, orders: [], comments: [], history: [], items: null,
-    view: "all", layout: "table", q: "", openId: null, loaded: false, threadLoaded: false, recovery: false };
+    view: "all", layout: "table", q: "", openId: null, loaded: false, threadLoaded: false, recovery: false,
+    updates: [], updatesLoaded: false, updatesOff: false, ordUpdates: [], ordLoaded: false, pane: "thread" };
   try { const l = localStorage.getItem("mrph.layout"); if (l === "board" || l === "table") S.layout = l; } catch (e) {}
 
   /* ---------- errors ---------- */
@@ -752,7 +778,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   }
 
   /* ---------- live data ---------- */
-  let meChannel = null, mainChannel = null, threadChannel = null, mainOn = false;
+  let meChannel = null, mainChannel = null, threadChannel = null, updatesChannel = null, mainOn = false;
   function watchMe() {
     meChannel = sb.channel("me-" + S.user.id)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${S.user.id}` }, async () => { await loadMe(); route(); })
@@ -780,7 +806,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   setInterval(() => { if (mainOn && !document.hidden && !stack.length) paint(); }, 5 * 60 * 1000);
   function startMain() {
     mainOn = true; S.loaded = false; paint();
-    loadOrders(); loadPeople();
+    loadOrders(); loadPeople(); loadFeed();
     const slow = setTimeout(() => { if (!S.loaded) { $("loadNote").textContent = "Can't reach the order data yet. Check your connection; this page keeps trying."; $("loadNote").hidden = false; } }, 10000);
     mainChannel = sb.channel("mrph-main")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => soon("orders", () => { loadOrders(); if (S.openId && !detailDirty()) loadItems(); }))
@@ -790,10 +816,13 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
         if (status === "SUBSCRIBED") clearTimeout(slow);
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") { $("loadNote").textContent = "Live updates paused. Changes by others appear when you reload or return to this tab."; $("loadNote").hidden = false; }
       });
+    updatesChannel = sb.channel("mrph-updates")
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_updates" }, () => soon("updates", () => { loadFeed(); if (S.openId) loadOrderUpdates(); }))
+      .subscribe();
   }
-  function stopMain() { if (mainChannel) sb.removeChannel(mainChannel); mainChannel = null; mainOn = false; }
-  function teardown() { stopMain(); if (meChannel) sb.removeChannel(meChannel); meChannel = null; stopThread(); closeAllWins(); S.orders = []; S.people = {}; S.loaded = false; S.me = null; S.role = "none"; }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && mainOn) { loadOrders(); loadPeople(); if (S.openId) { loadComments(); loadHistory(); } } });
+  function stopMain() { if (mainChannel) sb.removeChannel(mainChannel); mainChannel = null; if (updatesChannel) sb.removeChannel(updatesChannel); updatesChannel = null; mainOn = false; }
+  function teardown() { stopMain(); if (meChannel) sb.removeChannel(meChannel); meChannel = null; stopThread(); closeAllWins(); S.orders = []; S.people = {}; S.updates = []; S.updatesLoaded = false; S.loaded = false; S.me = null; S.role = "none"; }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && mainOn) { loadOrders(); loadPeople(); loadFeed(); if (S.openId) { loadComments(); loadHistory(); loadOrderUpdates(); } } });
 
   /* ---------- helpers ---------- */
   const role = () => S.role;
@@ -811,21 +840,23 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   const activeIds = () => Object.values(S.people).filter((p) => ACTIVE.includes(p.role) || p.email === OWNER_EMAIL.toLowerCase()).map((p) => p.id);
 
   /* ---------- views ---------- */
-  function inView(o) { if (S.view === "mine") return o.assignee === S.user.id; if (S.view.startsWith("co:")) return o.company === S.view.slice(3); if (S.view === "pay:partial") return o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled"; if (S.view === "pay:overdue") return isOverdue(o); if (S.view.startsWith("st:")) return o.status === S.view.slice(3); return true; }
+  function inView(o) { if (S.view.startsWith("st:")) return o.status === S.view.slice(3); if (isDone(o)) return false; if (S.view === "mine") return o.assignee === S.user.id; if (S.view.startsWith("co:")) return o.company === S.view.slice(3); if (S.view === "pay:partial") return o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled"; if (S.view === "pay:overdue") return isOverdue(o); return true; }
   function filtered() { const q = S.q.trim().toLowerCase(); return S.orders.filter((o) => inView(o) && (!q || [o.name, o.company, o.orderNo, o.items, o.invoiceNo, o.jobOrderNo, o.remarks, o.address].some((v) => String(v || "").toLowerCase().includes(q)))); }
-  const viewTitle = () => S.view.startsWith("co:") ? S.view.slice(3) : S.view === "pay:partial" ? "Partial payment" : S.view === "pay:overdue" ? "Unpaid 3+ days" : S.view === "mine" ? "Assigned to me" : S.view.startsWith("st:") ? S.view.slice(3) : "All orders";
+  const viewTitle = () => S.view.startsWith("co:") ? S.view.slice(3) : S.view === "pay:partial" ? "Partial payment" : S.view === "pay:overdue" ? "Unpaid 3+ days" : S.view === "mine" ? "Assigned to me" : S.view === "updates" ? "Updates" : S.view.startsWith("st:") ? S.view.slice(3) : "All orders";
 
   function paintNav() {
     const nav = $("nav"); nav.replaceChildren();
     const counts = {}; STATUSES.forEach((s) => counts[s] = 0); let mine = 0;
-    for (const o of S.orders) { if (counts[o.status] != null) counts[o.status]++; if (o.assignee === S.user.id) mine++; }
+    for (const o of S.orders) { if (counts[o.status] != null) counts[o.status]++; if (o.assignee === S.user.id && !isDone(o)) mine++; }
+    const live = S.orders.filter((o) => !isDone(o));
     const btn = (v, icon, label, n) => h("button", { class: "navbtn", type: "button", "aria-current": S.view === v ? "true" : "false", onclick: () => { S.view = v; paint(); } }, icon, h("span", { class: "lab", text: label }), n != null ? h("span", { class: "n", text: String(n) }) : null);
-    nav.append(btn("all", h("span", { class: "ic", text: "▤" }), "All orders", S.orders.length), btn("mine", h("span", { class: "ic", text: "@" }), "Assigned to me", mine),
-      ...COMPANIES.map((c) => btn("co:" + c, h("span", { class: "sd", style: `background:var(--st-${c === "Mirrora" ? "progress" : "delivery"}-fg)` }), c, S.orders.filter((o) => o.company === c).length)),
+    nav.append(btn("all", h("span", { class: "ic", text: "▤" }), "All orders", live.length), btn("mine", h("span", { class: "ic", text: "@" }), "Assigned to me", mine),
+      btn("updates", h("span", { class: "ic", text: "✎" }), "Updates", null),
+      ...COMPANIES.map((c) => btn("co:" + c, h("span", { class: "sd", style: `background:var(--st-${c === "Mirrora" ? "progress" : "delivery"}-fg)` }), c, live.filter((o) => o.company === c).length)),
       h("div", { class: "navhead", text: "Status" }), ...STATUSES.map((s) => btn("st:" + s, h("span", { class: "sd", style: `background:${STATUS_DOT[s]}` }), s, counts[s])),
       h("div", { class: "navhead", text: "Payment" }),
-      btn("pay:partial", h("span", { class: "sd", style: "background:var(--st-pending-fg)" }), "Partial payment", S.orders.filter((o) => o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled").length),
-      (() => { const n = S.orders.filter(isOverdue).length; const b = btn("pay:overdue", h("span", { class: "ic", text: "!" }), "Unpaid 3+ days", null); if (n) b.append(h("span", { class: "badge red", text: String(n) })); else b.append(h("span", { class: "n", text: "0" })); return b; })());
+      btn("pay:partial", h("span", { class: "sd", style: "background:var(--st-pending-fg)" }), "Partial payment", live.filter((o) => o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled").length),
+      (() => { const n = live.filter(isOverdue).length; const b = btn("pay:overdue", h("span", { class: "ic", text: "!" }), "Unpaid 3+ days", null); if (n) b.append(h("span", { class: "badge red", text: String(n) })); else b.append(h("span", { class: "n", text: "0" })); return b; })());
     if (S.isOwner) {
       const waiting = Object.values(S.people).filter((p) => p.role === "pending" && p.email !== OWNER_EMAIL.toLowerCase()).length;
       nav.append(h("div", { class: "navhead", text: "Admin" }), h("button", { class: "navbtn", type: "button", onclick: openIam }, h("span", { class: "ic", text: "⚿" }), h("span", { class: "lab", text: "Team access" }), waiting ? h("span", { class: "badge", text: `${waiting} waiting` }) : null));
@@ -878,11 +909,12 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   let dragId = null;
   function paintBoard(list) {
     const b = $("boardView"); b.replaceChildren();
-    const cols = S.view.startsWith("st:") ? [S.view.slice(3)] : STATUSES;
+    const cols = S.view.startsWith("st:") ? [S.view.slice(3)] : STATUSES.filter((s) => s !== "Completed" || can.edit());
     for (const s of cols) {
-      const items = list.filter((o) => o.status === s);
-      const col = h("div", { class: "col" }, h("div", { class: "colhead" }, h("span", { class: "pill " + STATUS_CLASS[s], text: s }), h("span", { class: "n", text: String(items.length) })));
-      if (!items.length) col.append(h("div", { class: "colempty", text: can.edit() ? "Drag an order here" : "Nothing here" }));
+      const dropOnly = s === "Completed" && !S.view.startsWith("st:");
+      const items = dropOnly ? [] : list.filter((o) => o.status === s);
+      const col = h("div", { class: "col" }, h("div", { class: "colhead" }, h("span", { class: "pill " + STATUS_CLASS[s], text: s }), h("span", { class: "n", text: dropOnly ? "" : String(items.length) })));
+      if (!items.length) col.append(h("div", { class: "colempty", text: dropOnly ? "Drop here to complete" : can.edit() ? "Drag an order here" : "Nothing here" }));
       for (const o of items) {
         const card = h("div", { class: "card" + (isOverdue(o) ? " overdue" : ""), tabindex: "0", role: "button", "aria-label": `${o.name}, ${o.orderNo}`, draggable: can.edit() ? "true" : null, onclick: () => openDetail(o.id), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(o.id); } } },
           h("span", { class: "t", text: o.name || "Untitled" }),
@@ -924,11 +956,14 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     const n = $("roleNote");
     if (S.loaded && role() === "viewer") { n.textContent = "You can view orders and comment in threads. Ask the tracker owner to make you an Editor to add or change orders."; n.hidden = false; } else n.hidden = true;
     $("viewTitle").textContent = viewTitle();
-    const list = filtered(); const inViewCount = S.orders.filter(inView).length;
-    $("count").textContent = !S.loaded ? "Loading orders…" : S.q.trim() ? `${list.length} of ${inViewCount} orders match` : `${inViewCount} order${inViewCount === 1 ? "" : "s"}`;
+    const isUpd = S.view === "updates";
+    const list = isUpd ? [] : filtered(); const inViewCount = isUpd ? 0 : S.orders.filter(inView).length; const feed = isUpd ? feedRows() : [];
+    $("count").textContent = !S.loaded ? "Loading orders…" : isUpd ? (S.q.trim() ? `${feed.length} update${feed.length === 1 ? "" : "s"} match` : `${feed.length} recent update${feed.length === 1 ? "" : "s"}`) : S.q.trim() ? `${list.length} of ${inViewCount} orders match` : `${inViewCount} order${inViewCount === 1 ? "" : "s"}`;
     $("lyTable").setAttribute("aria-pressed", S.layout === "table"); $("lyBoard").setAttribute("aria-pressed", S.layout === "board");
-    $("tableView").hidden = S.layout !== "table"; $("boardView").hidden = S.layout !== "board";
-    if (S.layout === "table") {
+    $("lyTable").parentElement.hidden = isUpd; $("copyCsv").hidden = isUpd;
+    $("tableView").hidden = isUpd || S.layout !== "table"; $("boardView").hidden = isUpd || S.layout !== "board"; $("updatesView").hidden = !isUpd;
+    if (isUpd) paintFeed(feed);
+    else if (S.layout === "table") {
       paintTable(list);
       const empty = $("empty");
       if (S.loaded && !list.length) {
@@ -938,8 +973,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       } else empty.hidden = true;
       $("addRow").hidden = !(S.loaded && can.add());
     } else paintBoard(list);
-    $("fab").hidden = !(S.loaded && can.add());
-    if (S.openId && !$("detailWin").hidden) { if (!detailDirty()) paintDetail(); else paintPreview(); paintThread(); }
+    $("fab").hidden = !(S.loaded && can.add() && !isUpd);
+    if (S.openId && !$("detailWin").hidden) { if (!detailDirty()) paintDetail(); else paintPreview(); paintThread(); paintUpdates(); }
     if (!$("iamWin").hidden) paintPeople();
   }
   function setLayout(l) { S.layout = l; try { localStorage.setItem("mrph.layout", l); } catch (e) {} paint(); }
@@ -1113,9 +1148,10 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   const EDIT_FIELDS = [["name", "Name"], ["company", "Company"], ["status", "Status"], ["paymentStatus", "Payment"], ["assignee", "Assignee"], ["invoiceNo", "Invoice No."], ["jobOrderNo", "Job Order No."], ["address", "Address"], ["remarks", "Remarks"]];
   const COL = { name: "name", company: "company", status: "status", paymentStatus: "payment_status", assignee: "assignee", invoiceNo: "invoice_no", jobOrderNo: "job_order_no", address: "address", remarks: "remarks" };
   let snapshotVals = null, detailEd = null;
-  function openDetail(id) {
-    S.openId = id; snapshotVals = null; detailEd = null; S.comments = []; S.history = []; S.items = null;
-    paintDetail(); openWin($("detailWin")); startThread(id); loadHistory(); loadItems();
+  function openDetail(id, pane) {
+    S.openId = id; snapshotVals = null; detailEd = null; S.comments = []; S.history = []; S.items = null; S.ordUpdates = []; S.ordLoaded = false;
+    setPane(pane || "thread"); $("uText").value = ""; $("uErr").textContent = "";
+    paintDetail(); openWin($("detailWin")); startThread(id); loadHistory(); loadItems(); loadOrderUpdates();
   }
   async function loadItems() {
     const id = S.openId; if (!id) return;
@@ -1332,6 +1368,77 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       if (r.ok && out.sent) toast(`Emailed ${out.sent} tagged ${out.sent === 1 ? "person" : "people"}.`);
       else if (!r.ok) toast("Reply posted, but the email to tagged people didn't go out.");
     } catch (_) { toast("Reply posted, but the email to tagged people didn't go out."); }
+  }
+
+  /* ---------- updates ---------- */
+  const missingTable = (e) => !!e && (e.code === "42P01" || e.code === "PGRST205" || /does not exist|schema cache/i.test(String(e.message || "")));
+  async function loadFeed() {
+    const { data, error } = await sb.from("order_updates").select("id,order_id,author,body,created_at").order("created_at", { ascending: false }).limit(200);
+    if (error) { S.updatesOff = missingTable(error); S.updates = []; } else { S.updatesOff = false; S.updates = data || []; }
+    S.updatesLoaded = true; if (S.view === "updates") paint();
+  }
+  async function loadOrderUpdates() {
+    const id = S.openId; if (!id) return;
+    const { data, error } = await sb.from("order_updates").select("id,order_id,author,body,created_at").eq("order_id", id).order("created_at").limit(300);
+    if (S.openId !== id) return;
+    if (error) { S.updatesOff = missingTable(error); S.ordUpdates = []; } else S.ordUpdates = data || [];
+    S.ordLoaded = true; paintUpdates();
+  }
+  function setPane(p) {
+    S.pane = p; $("threadPane").hidden = p !== "thread"; $("updatesPane").hidden = p !== "updates";
+    $("tHead").setAttribute("aria-pressed", String(p === "thread")); $("uHead").setAttribute("aria-pressed", String(p === "updates"));
+  }
+  $("tHead").addEventListener("click", () => setPane("thread"));
+  $("uHead").addEventListener("click", () => setPane("updates"));
+  async function deleteUpdate(u) {
+    const { data, error } = await sb.from("order_updates").delete().eq("id", u.id).select("id");
+    if (error || !data || !data.length) { toast(dbMsg(error || REFUSED)); return; }
+    loadOrderUpdates(); loadFeed();
+  }
+  function paintUpdates() {
+    const o = S.orders.find((x) => x.id === S.openId); const n = S.ordUpdates.length;
+    $("uHead").textContent = n ? `Updates · ${n}` : "Updates";
+    const box = $("uMsgs"); const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    $("uComposer").hidden = !(o && can.edit() && !S.updatesOff);
+    if (S.updatesOff) { box.replaceChildren(h("div", { class: "nothread", text: "Updates aren't set up on the database yet." })); return; }
+    if (!S.ordLoaded) { box.replaceChildren(h("div", { class: "nothread", text: "Loading updates…" })); return; }
+    if (!n) { box.replaceChildren(h("div", { class: "nothread", text: can.edit() ? "No updates yet. Post what just happened, like “Glass cut, now polishing”." : "No updates yet." })); return; }
+    box.replaceChildren(...S.ordUpdates.map((u) => {
+      const ts = Date.parse(u.created_at);
+      const del = (can.edit() && (u.author === S.user.id || role() === "admin")) ? h("button", { class: "textlink", type: "button", style: "font-size:12px;margin-left:auto", text: "Delete", onclick: () => deleteUpdate(u) }) : null;
+      return h("div", { class: "msg" }, ini(u.author), h("div", null, h("div", { class: "hd" }, h("b", { text: nameOf(u.author) }), h("time", { title: fmtTime(ts), text: dshort.format(new Date(ts)) }), del), h("div", { class: "bd", text: u.body })));
+    }));
+    if (atBottom || box.dataset.n !== String(n)) box.scrollTop = box.scrollHeight; box.dataset.n = String(n);
+  }
+  function feedRows() {
+    const q = S.q.trim().toLowerCase(); const byId = new Map(S.orders.map((o) => [o.id, o]));
+    return S.updates.map((u) => ({ u, o: byId.get(u.order_id) })).filter(({ o }) => o)
+      .filter(({ u, o }) => !q || [u.body, o.name, o.orderNo, nameOf(u.author)].some((v) => String(v || "").toLowerCase().includes(q)));
+  }
+  function paintFeed(rows) {
+    const box = $("updatesView"); box.replaceChildren();
+    if (!S.loaded || !S.updatesLoaded) return;
+    if (S.updatesOff) { box.append(h("div", { class: "empty" }, h("strong", { text: "Updates aren't set up yet" }), h("span", { text: "The database is missing the updates table." }))); return; }
+    if (!rows.length) { box.append(h("div", { class: "empty" }, h("strong", { text: S.q.trim() ? "No updates match" : "No updates yet" }), h("span", { text: S.q.trim() ? "Clear the search to see all updates." : "Updates posted on an order show up here." }))); return; }
+    box.append(h("div", { class: "updlist" }, rows.map(({ u, o }) => {
+      const ts = Date.parse(u.created_at); const open = () => openDetail(o.id, "updates");
+      return h("div", { class: "msg", onclick: (e) => { if (!e.target.closest("button")) open(); } }, ini(u.author),
+        h("div", null, h("div", { class: "hd" }, h("b", { text: nameOf(u.author) }), h("span", { class: "meta", text: "on" }), h("button", { class: "link", type: "button", onclick: open, text: `${o.name || "Untitled"} · ${o.orderNo || ""}` }),
+          h("span", { class: "pill " + (STATUS_CLASS[o.status] || "s-hold"), text: o.status }), h("time", { title: fmtTime(ts), text: dshort.format(new Date(ts)) })),
+          h("div", { class: "bd", text: u.body })));
+    })));
+  }
+  $("uText").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); postUpdate(); } });
+  $("uSend").addEventListener("click", postUpdate);
+  let posting = false;
+  async function postUpdate() {
+    const id = S.openId; const text = $("uText").value.trim(); if (!text || !id || posting || !can.edit()) return;
+    if (text.length > 2000) { $("uErr").textContent = "That update is too long. Keep it under 2,000 characters."; return; }
+    posting = true; $("uSend").disabled = true; $("uErr").textContent = "";
+    const { error } = await sb.from("order_updates").insert({ order_id: id, body: text });
+    if (error) $("uErr").textContent = missingTable(error) ? "Updates aren't set up on the database yet." : dbMsg(error);
+    else { $("uText").value = ""; loadOrderUpdates(); loadFeed(); }
+    posting = false; $("uSend").disabled = false;
   }
 
   /* ---------- add order ---------- */
