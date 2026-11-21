@@ -1590,7 +1590,10 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   const cellText = (v) => String(v == null ? "" : v).replace(/\s+/g, " ").trim();
   const cellNum = (v) => { if (typeof v === "number") return isFinite(v) ? v : null; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : null; };
   const IMPORT_LABELS = [
-    ["name", /^(customer|client|customer name|client name|name|bill(ed)? to|sold to|company name|attention|attn\.?)$/i],
+    ["name", /^(customer|client|client'?s name|customer'?s name|customer name|client name|name|bill(ed)? to|sold to|company name|attention|attn\.?)$/i],
+    ["contact", /^(contact|contact (number|no\.?|#)|phone|phone (number|no\.?)|mobile|mobile (number|no\.?)|tel(ephone)?)$/i],
+    ["date", /^(date|order date)$/i],
+    ["deadline", /^(deadline|due date|target date|delivery date)$/i],
     ["address", /^(address|delivery address|shipping address|ship to|deliver to|site address|location)$/i],
     ["invoice", /^(invoice|invoice no\.?|invoice number|invoice #|inv\.? ?no\.?|si no\.?)$/i],
     ["jo", /^(job order|job order no\.?|job order number|jo|jo no\.?|j\.?o\.? ?no\.?|jo #)$/i],
@@ -1649,6 +1652,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     const payText = d.pay || all;
     if (/fully\s*paid|paid in full/i.test(payText)) d.paymentStatus = "Fully Paid";
     else if (/partial\s*payment|down\s*payment/i.test(payText)) d.paymentStatus = "Partial Payment";
+    if (!d.remarks) { const bits = [d.contact && `Contact: ${d.contact}`, d.date && `Date: ${d.date}`, d.deadline && `Deadline: ${d.deadline}`].filter(Boolean); if (bits.length) d.remarks = bits.join("; "); }
     if (!items.length && !d.name && !d.address) d.rawText = all.replace(/\s*\n\s*/g, " | ").slice(0, 1000);
     return { d, items };
   }
@@ -1700,6 +1704,37 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     return out;
   }
 
+  /* A company logo is often a picture with no text, so recognise it by a tiny fingerprint (dHash). */
+  const LOGO_HASHES = [["Mirrora", "0028020010000000001535401a48a01dba400dcda001152001aa80001000000000000000"]];
+  const hamming = (a, b) => { let n = 0; for (let i = 0; i < a.length; i++) { let x = parseInt(a[i], 16) ^ parseInt(b[i], 16); while (x) { n += x & 1; x >>= 1; } } return n; };
+  function dHash(src, w, h) {
+    const c = document.createElement("canvas"); c.width = 25; c.height = 12;
+    const g = c.getContext("2d", { willReadFrequently: true }); g.fillStyle = "#fff"; g.fillRect(0, 0, 25, 12); g.drawImage(src, 0, 0, w, h, 0, 0, 25, 12);
+    const px = g.getImageData(0, 0, 25, 12).data; let bits = "";
+    for (let y = 0; y < 12; y++) for (let x = 0; x < 24; x++) { const i = (y * 25 + x) * 4, j = i + 4; bits += (px[i] + px[i + 1] + px[i + 2]) > (px[j] + px[j + 1] + px[j + 2]) ? "1" : "0"; }
+    let hex = ""; for (let i = 0; i < 288; i += 4) hex += parseInt(bits.slice(i, i + 4), 2).toString(16); return hex;
+  }
+  async function pdfLogoCompany(doc) {
+    try {
+      const page = await doc.getPage(1), ops = await page.getOperatorList(), OPS = pdfjsLib.OPS;
+      for (let i = 0; i < ops.fnArray.length; i++) {
+        if (ops.fnArray[i] !== OPS.paintImageXObject) continue;
+        const id = ops.argsArray[i][0], store = String(id).startsWith("g_") ? page.commonObjs : page.objs;
+        const img = await new Promise((res) => store.get(id, res)); if (!img) continue;
+        let src, w = img.width, h = img.height;
+        if (img.bitmap) { src = img.bitmap; w = src.width; h = src.height; }
+        else if (img.data && (img.kind === 2 || img.kind === 3)) {
+          const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d"); const im = g.createImageData(w, h); const n = w * h;
+          for (let k = 0; k < n; k++) { const a = img.kind === 3 ? k * 4 : k * 3; im.data[k * 4] = img.data[a]; im.data[k * 4 + 1] = img.data[a + 1]; im.data[k * 4 + 2] = img.data[a + 2]; im.data[k * 4 + 3] = 255; }
+          g.putImageData(im, 0, 0); src = c;
+        } else continue;
+        const hash = dHash(src, w, h);
+        for (const [co, ref] of LOGO_HASHES) if (hamming(hash, ref) <= 20) return co;
+      }
+    } catch (e) { /* logo detection is optional */ }
+    return null;
+  }
+
   async function pdfFile(file) {
     await Promise.all([loadScript("pdf"), loadScript("pdfWorker")]);
     pdfjsLib.GlobalWorkerOptions.workerSrc = LIBS.pdfWorker;
@@ -1707,19 +1742,29 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     const rows = [];
     for (let p = 1; p <= Math.min(doc.numPages, 10); p++) {
       const tc = await (await doc.getPage(p)).getTextContent();
-      const bits = tc.items.filter((i) => i.str && i.str.trim()).map((i) => ({ s: i.str, x: i.transform[4], y: i.transform[5], w: i.width || 0 }));
+      const bits = tc.items.filter((i) => i.str && i.str.trim()).map((i) => ({ s: i.str, x: i.transform[4], y: i.transform[5], w: i.width || 0, fs: i.height || 10 }));
       bits.sort((a, b) => b.y - a.y || a.x - b.x);
       const lines = [];
       for (const b of bits) { const ln = lines[lines.length - 1]; if (ln && Math.abs(ln.y - b.y) <= 3) ln.bits.push(b); else lines.push({ y: b.y, bits: [b] }); }
+      const page = [];
       for (const ln of lines) {
         ln.bits.sort((a, b) => a.x - b.x);
-        const cells = []; let end = null;
-        for (const b of ln.bits) { if (end != null && b.x - end < 8 && cells.length) cells[cells.length - 1] += (b.x - end > 1 ? " " : "") + b.s; else cells.push(b.s); end = b.x + b.w; }
-        rows.push(cells);
+        const cells = []; let end = null, fs = 0;
+        for (const b of ln.bits) { fs = Math.max(fs, b.fs); if (end != null && b.x - end < 8 && cells.length) cells[cells.length - 1].s += (b.x - end > 1 ? " " : "") + b.s; else cells.push({ s: b.s, x: b.x }); end = b.x + b.w; }
+        /* a lone line right under a cell and lined up with it is that cell's text wrapping onto the next line */
+        const prev = page[page.length - 1];
+        if (prev && cells.length === 1 && prev.y - ln.y <= prev.fs * 1.8 && !/^(sub ?total|total|grand total|balance|vat|discount|amount due)\b/i.test(cells[0].s) && !/[:：]$/.test(cells[0].s)) {
+          const tgt = prev.cells.find((c) => Math.abs(c.x - cells[0].x) <= 4);
+          if (tgt) { tgt.s += " " + cells[0].s; prev.y = ln.y; continue; }
+        }
+        page.push({ y: ln.y, fs, cells });
       }
+      rows.push(...page.map((r) => r.cells.map((c) => c.s)));
     }
     if (!rows.length) throw new Error("No text found. It may be a scanned PDF; try importing a photo of it instead.");
-    return { ...parseRows(rows), photos: [] };
+    const res = parseRows(rows);
+    if (!res.d.company) { const co = await pdfLogoCompany(doc); if (co) res.d.company = co; }
+    return { ...res, photos: [] };
   }
 
   async function importFiles(files) {
@@ -1739,6 +1784,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
           else if (/^image\//.test(f.type) || /\.(jpe?g|png|webp|gif|heic)$/i.test(f.name)) { looseImages.push(f); merged.names.push(f.name); continue; }
           else { merged.failed.push(f.name + " (unsupported type)"); continue; }
           merged.names.push(f.name);
+          const fm = f.name.replace(/\.[^.]+$/, "").match(/^\s*([A-Za-z]{2,4}-[\w-]*\d)\s*[-–]\s*(.+?)\s*$/);
+          if (fm) { if (!res.d.name) res.d.name = fm[2]; if (!res.d.jo && /^jo/i.test(fm[1])) res.d.jo = fm[1]; }
           for (const k in res.d) if (!merged.d[k]) merged.d[k] = res.d[k];
           const base = merged.items.length;
           res.items.forEach((it) => merged.items.push({ ...it, photoBlobs: [] }));
