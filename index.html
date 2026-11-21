@@ -470,6 +470,8 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
         <button type="button" id="lyBoard" aria-pressed="false">Board</button>
       </div>
       <button class="btn" type="button" id="copyCsv" title="Copy the orders in this view as CSV for Excel or Sheets">Copy CSV</button>
+      <button class="btn" type="button" id="importBtn" hidden title="Import an order from an Excel, CSV or PDF file, or from photos">Import</button>
+      <input type="file" id="importFile" accept=".xlsx,.xls,.csv,.pdf,application/pdf,image/*" multiple hidden>
     </header>
     <div class="content">
       <div class="notice" id="roleNote" hidden></div>
@@ -541,12 +543,16 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
   </div>
   <form id="addForm" novalidate style="display:contents">
     <div class="win-body">
+      <div class="notice" id="aImportNote" role="status" hidden></div>
       <div class="field"><label for="aName">Name</label><input id="aName" autocomplete="off" maxlength="200" placeholder="Customer or company name"></div>
       <div class="field"><label for="aCompany">Company</label>
         <select id="aCompany"><option value="" selected disabled>Choose…</option><option>Mirrora</option><option>Cebu Mirrors</option></select></div>
       <div class="field"><label for="aPay">Payment status</label>
         <select id="aPay"><option value="" selected disabled>Choose…</option><option>Partial Payment</option><option>Fully Paid</option></select></div>
       <div class="field"><label for="aAddress">Address</label><textarea id="aAddress" placeholder="Delivery or site address"></textarea></div>
+      <div class="field"><label for="aInvoice">Invoice No.</label><input id="aInvoice" autocomplete="off" maxlength="100"></div>
+      <div class="field"><label for="aJo">Job Order No.</label><input id="aJo" autocomplete="off" maxlength="100"></div>
+      <div class="field"><label for="aRemarks">Remarks</label><textarea id="aRemarks" maxlength="1000"></textarea></div>
       <div class="field"><span class="k">Items</span><div id="aItemsBox"></div></div>
       <div class="err" id="aErr" role="alert"></div>
     </div>
@@ -1023,6 +1029,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       $("addRow").hidden = !(S.loaded && can.add());
     } else paintBoard(list);
     $("fab").hidden = !(S.loaded && can.add() && !isUpd);
+    $("importBtn").hidden = !(S.loaded && can.add() && !isUpd);
     if (S.openId && !$("detailWin").hidden) { if (!detailDirty()) paintDetail(); else paintPreview(); paintThread(); paintUpdates(); }
     if (!$("iamWin").hidden) paintPeople();
   }
@@ -1178,6 +1185,14 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       busy: () => st.uploading > 0,
       dirty: () => JSON.stringify(st.rows.map(({ key, ...r }) => r)) !== initialSig,
       newUploads: () => st.uploaded.slice(),
+      load(rows) { st.rows = rows.slice(0, 50).map(toRow); if (!st.rows.length) st.rows = [toRow({})]; render(); },
+      async attach(i, blob) {
+        const r = st.rows[i]; if (!r || r.photos.length >= MAX_PHOTOS) return false;
+        st.uploading++; refreshTotals();
+        try { const p = await uploadPhoto(orderId, blob); st.uploaded.push(p); r.photos.push(p); }
+        finally { st.uploading--; render(); }
+        return true;
+      },
       allPhotos: () => st.rows.flatMap((r) => r.photos),
       sizes: () => st.rows.map((r) => r.size.trim().slice(0, 80)),
       flags: () => st.rows.map((r) => ({ on: !!r.backlights, colors: r.backlights ? r.colors.map((c) => c.trim().slice(0, 40)) : [] })),
@@ -1525,7 +1540,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   /* ---------- add order ---------- */
   let addEd = null, addId = null;
   function openAdd() {
-    $("addForm").reset(); $("aErr").textContent = "";
+    $("addForm").reset(); $("aErr").textContent = ""; $("aImportNote").hidden = true;
     addId = crypto.randomUUID(); addEd = itemsEditor(addId, []);
     $("aItemsBox").replaceChildren(addEd.el); $("aTotal").replaceChildren(addEd.totalEl);
     if (S.view.startsWith("co:")) $("aCompany").value = S.view.slice(3);
@@ -1540,16 +1555,234 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     const company = $("aCompany").value; if (!COMPANIES.includes(company)) { errEl.textContent = "Choose which company this order is from."; $("aCompany").focus(); return; }
     const pay = $("aPay").value; if (!PAYMENTS.includes(pay)) { errEl.textContent = "Choose a payment status."; $("aPay").focus(); return; }
     const m = addEd.validate(); if (m) { errEl.textContent = m; return; }
+    const extra = { invoice: $("aInvoice").value.trim().slice(0, 100), jo: $("aJo").value.trim().slice(0, 100), remarks: $("aRemarks").value.trim().slice(0, 1000) };
     const btn = $("aSave"); btn.disabled = true; btn.textContent = "Adding…";
     const { data, error } = await sb.rpc("create_order", { p_id: addId, p_name: name.slice(0, 200), p_address: address.slice(0, 1000),
       p_status: S.view.startsWith("st:") ? S.view.slice(3) : "Pending", p_assignee: S.view === "mine" ? S.user.id : null, p_items: addEd.value(), p_payment: pay });
     btn.disabled = false; btn.textContent = "Add order";
     if (error) { errEl.textContent = dbMsg(error); return; }
     const newId = addId, sizes = addEd.sizes(), flags = addEd.flags(); addEd = null; closeWin($("addWin")); toast(`Added ${data}`);
-    try { await updateOrder(newId, { company }); } catch (e2) { toast(`Added ${data}, but the company didn't save. Open the order and set it again.`); }
+    const patch = { company };
+    if (extra.invoice) patch.invoice_no = extra.invoice; if (extra.jo) patch.job_order_no = extra.jo; if (extra.remarks) patch.remarks = extra.remarks;
+    try { await updateOrder(newId, patch); } catch (e2) { toast(`Added ${data}, but the company, invoice/JO no. or remarks didn't save. Open the order and set them again.`); }
     if (sizes.some(Boolean) || flags.some((f) => f.on)) { try { await saveSizes(newId, sizes, flags); } catch (e3) { toast(`Added ${data}, but the item sizes didn't save. Open the order and set them again.`); } }
     loadOrders();
   });
+
+
+  /* ---------- import from a file (Excel, CSV, PDF, photos) ---------- */
+  const LIBS = {
+    xlsx: "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
+    jszip: "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js",
+    pdf: "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js",
+    pdfWorker: "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js"
+  };
+  const libCache = {};
+  function loadScript(key) {
+    if (!libCache[key]) libCache[key] = new Promise((res, rej) => {
+      const s = document.createElement("script"); s.src = LIBS[key]; s.onload = res;
+      s.onerror = () => { delete libCache[key]; rej(new Error("Couldn't load the file reader. Check your connection and try again.")); };
+      document.head.append(s);
+    });
+    return libCache[key];
+  }
+  const IMPORT_MAX_BYTES = 15 * 1024 * 1024, IMPORT_MAX_FILES = 8;
+  const cellText = (v) => String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+  const cellNum = (v) => { if (typeof v === "number") return isFinite(v) ? v : null; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : null; };
+  const IMPORT_LABELS = [
+    ["name", /^(customer|client|customer name|client name|name|bill(ed)? to|sold to|company name|attention|attn\.?)$/i],
+    ["address", /^(address|delivery address|shipping address|ship to|deliver to|site address|location)$/i],
+    ["invoice", /^(invoice|invoice no\.?|invoice number|invoice #|inv\.? ?no\.?|si no\.?)$/i],
+    ["jo", /^(job order|job order no\.?|job order number|jo|jo no\.?|j\.?o\.? ?no\.?|jo #)$/i],
+    ["remarks", /^(remarks?|notes?)$/i],
+    ["pay", /^(payment|payment status|mode of payment)$/i]
+  ];
+  const IMPORT_HDR = {
+    desc: /^(item|items|item description|description|particulars|product|product name|details|item name)$/i,
+    size: /^(size|dimensions?|measurements?)$/i,
+    qty: /^(qty\.?|quantity|pcs\.?|pieces|no\.? of pcs)$/i,
+    price: /^(unit price|price|rate|unit cost|srp|selling price)$/i,
+    amount: /^(amount|total|line total)$/i
+  };
+  const importLabel = (t) => { const s = t.replace(/[:：\-–\s]+$/, "").trim(); for (const [k, re] of IMPORT_LABELS) if (re.test(s)) return k; return null; };
+
+  /* rows = array of arrays of cells (from a sheet or from PDF text lines) */
+  function parseRows(rows) {
+    const d = {}; const items = [];
+    let hdrRow = -1, col = {};
+    for (let r = 0; r < rows.length && hdrRow < 0; r++) {
+      const m = {}; (rows[r] || []).forEach((v, c) => { const t = cellText(v); for (const k in IMPORT_HDR) if (m[k] == null && IMPORT_HDR[k].test(t)) m[k] = c; });
+      if (m.desc != null && (m.qty != null || m.price != null || m.amount != null || m.size != null)) { hdrRow = r; col = m; }
+    }
+    for (let r = 0; r < rows.length; r++) {
+      if (r === hdrRow) continue;
+      const row = rows[r] || [];
+      for (let c = 0; c < row.length; c++) {
+        const t = cellText(row[c]); if (!t || t.length > 200) continue;
+        let key = null, val = "";
+        const inl = t.match(/^([^:：]{2,28})[:：]\s*(.+)$/);
+        if (inl && importLabel(inl[1])) { key = importLabel(inl[1]); val = inl[2]; }
+        else if (t.length < 30 && importLabel(t)) {
+          key = importLabel(t);
+          for (let k = c + 1; k < row.length && !val; k++) val = cellText(row[k]);
+          if (!val && rows[r + 1]) val = cellText((rows[r + 1] || [])[c]);
+          if (val && importLabel(val)) val = "";
+        }
+        if (key && val && !d[key]) d[key] = val;
+      }
+    }
+    if (hdrRow >= 0) {
+      let blanks = 0;
+      for (let r = hdrRow + 1; r < rows.length; r++) {
+        const row = rows[r] || []; const desc = cellText(row[col.desc]);
+        if (!desc) { if (++blanks >= 2) break; continue; } blanks = 0;
+        if (/^(sub ?total|total|grand total|balance|vat|discount|amount due)\b/i.test(desc)) break;
+        const qty = col.qty != null ? cellNum(row[col.qty]) : null;
+        let price = col.price != null ? cellNum(row[col.price]) : null;
+        if (price == null && col.amount != null) { const a = cellNum(row[col.amount]); if (a != null) price = Math.round((a / (qty > 0 ? qty : 1)) * 100) / 100; }
+        items.push({ description: desc.slice(0, 300), size: col.size != null ? cellText(row[col.size]).slice(0, 80) : "", qty: qty > 0 ? qty : 1, price, row: r });
+      }
+    }
+    const all = rows.flat().map(cellText).join(" \n ");
+    const co = all.match(/cebu\s*mirrors?|mirrora/i);
+    if (co) d.company = /cebu/i.test(co[0]) ? "Cebu Mirrors" : "Mirrora";
+    const payText = d.pay || all;
+    if (/fully\s*paid|paid in full/i.test(payText)) d.paymentStatus = "Fully Paid";
+    else if (/partial\s*payment|down\s*payment/i.test(payText)) d.paymentStatus = "Partial Payment";
+    if (!items.length && !d.name && !d.address) d.rawText = all.replace(/\s*\n\s*/g, " | ").slice(0, 1000);
+    return { d, items };
+  }
+
+  async function sheetFile(file) {
+    await loadScript("xlsx");
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+    let pick = null;
+    for (let i = 0; i < wb.SheetNames.length; i++) {
+      const ws = wb.Sheets[wb.SheetNames[i]]; if (!ws || !ws["!ref"]) continue;
+      const offset = XLSX.utils.decode_range(ws["!ref"]).s.r;
+      const res = parseRows(XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", blankrows: true }));
+      if (!pick || (!pick.res.items.length && res.items.length)) pick = { res, idx: i, offset };
+      if (pick.res.items.length) break;
+    }
+    if (!pick) throw new Error("That file is empty.");
+    const photos = [];
+    if (/\.xlsx$/i.test(file.name) && pick.res.items.length) { try { photos.push(...await xlsxImages(buf, pick.idx, pick.offset)); } catch (e) { /* photos are optional */ } }
+    return { ...pick.res, photos };
+  }
+
+  const RNS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  async function xlsxImages(buf, sheetIdx, offset) {
+    await loadScript("jszip");
+    const zip = await JSZip.loadAsync(buf);
+    const text = async (p) => { const f = zip.file(p); return f ? await f.async("string") : null; };
+    const xml = (s) => new DOMParser().parseFromString(s, "application/xml");
+    const resolve = (dir, t) => t.startsWith("/") ? t.slice(1) : new URL(t, "http://x/" + dir + "/").pathname.slice(1);
+    const relMap = (s) => { const m = {}; for (const r of xml(s).getElementsByTagName("Relationship")) m[r.getAttribute("Id")] = { t: r.getAttribute("Target"), ty: r.getAttribute("Type") || "" }; return m; };
+    const wb = await text("xl/workbook.xml"), wbr = await text("xl/_rels/workbook.xml.rels"); if (!wb || !wbr) return [];
+    const sh = xml(wb).getElementsByTagName("sheet")[sheetIdx]; if (!sh) return [];
+    const wr = relMap(wbr)[sh.getAttributeNS(RNS, "id")]; if (!wr) return [];
+    const sheetPath = resolve("xl", wr.t); const sheetDir = sheetPath.slice(0, sheetPath.lastIndexOf("/"));
+    const srel = await text(`${sheetDir}/_rels/${sheetPath.split("/").pop()}.rels`); if (!srel) return [];
+    const dr = Object.values(relMap(srel)).find((x) => /\/drawing$/.test(x.ty)); if (!dr) return [];
+    const drawPath = resolve(sheetDir, dr.t); const drawDir = drawPath.slice(0, drawPath.lastIndexOf("/"));
+    const dxml = await text(drawPath), drel = await text(`${drawDir}/_rels/${drawPath.split("/").pop()}.rels`); if (!dxml || !drel) return [];
+    const rels = relMap(drel); const out = [];
+    for (const a of xml(dxml).getElementsByTagName("*")) {
+      if (!/^(twoCellAnchor|oneCellAnchor)$/.test(a.localName)) continue;
+      const from = a.getElementsByTagNameNS("*", "from")[0], blip = a.getElementsByTagNameNS("*", "blip")[0]; if (!from || !blip) continue;
+      const rel = rels[blip.getAttributeNS(RNS, "embed")]; if (!rel) continue;
+      const f = zip.file(resolve(drawDir, rel.t)); if (!f) continue;
+      const ext = (rel.t.split(".").pop() || "").toLowerCase(); if (!/^(png|jpe?g|gif|webp|bmp)$/.test(ext)) continue;
+      const rowEl = from.getElementsByTagNameNS("*", "row")[0];
+      out.push({ row: (parseInt(rowEl && rowEl.textContent, 10) || 0) - offset, blob: new Blob([await f.async("uint8array")], { type: "image/" + (ext === "jpg" ? "jpeg" : ext) }) });
+    }
+    return out;
+  }
+
+  async function pdfFile(file) {
+    await Promise.all([loadScript("pdf"), loadScript("pdfWorker")]);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = LIBS.pdfWorker;
+    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    const rows = [];
+    for (let p = 1; p <= Math.min(doc.numPages, 10); p++) {
+      const tc = await (await doc.getPage(p)).getTextContent();
+      const bits = tc.items.filter((i) => i.str && i.str.trim()).map((i) => ({ s: i.str, x: i.transform[4], y: i.transform[5], w: i.width || 0 }));
+      bits.sort((a, b) => b.y - a.y || a.x - b.x);
+      const lines = [];
+      for (const b of bits) { const ln = lines[lines.length - 1]; if (ln && Math.abs(ln.y - b.y) <= 3) ln.bits.push(b); else lines.push({ y: b.y, bits: [b] }); }
+      for (const ln of lines) {
+        ln.bits.sort((a, b) => a.x - b.x);
+        const cells = []; let end = null;
+        for (const b of ln.bits) { if (end != null && b.x - end < 8 && cells.length) cells[cells.length - 1] += (b.x - end > 1 ? " " : "") + b.s; else cells.push(b.s); end = b.x + b.w; }
+        rows.push(cells);
+      }
+    }
+    if (!rows.length) throw new Error("No text found. It may be a scanned PDF; try importing a photo of it instead.");
+    return { ...parseRows(rows), photos: [] };
+  }
+
+  async function importFiles(files) {
+    files = [...files];
+    if (!files.length) return;
+    if (files.length > IMPORT_MAX_FILES) { toast(`Pick up to ${IMPORT_MAX_FILES} files at a time.`); return; }
+    const btn = $("importBtn"); btn.disabled = true; btn.textContent = "Reading…";
+    const merged = { d: {}, items: [], failed: [], names: [] };
+    const looseImages = [];
+    try {
+      for (const f of files) {
+        if (f.size > IMPORT_MAX_BYTES) { merged.failed.push(f.name + " (over 15 MB)"); continue; }
+        try {
+          let res = null;
+          if (/\.(xlsx|xls|csv)$/i.test(f.name)) res = await sheetFile(f);
+          else if (/\.pdf$/i.test(f.name) || f.type === "application/pdf") res = await pdfFile(f);
+          else if (/^image\//.test(f.type) || /\.(jpe?g|png|webp|gif|heic)$/i.test(f.name)) { looseImages.push(f); merged.names.push(f.name); continue; }
+          else { merged.failed.push(f.name + " (unsupported type)"); continue; }
+          merged.names.push(f.name);
+          for (const k in res.d) if (!merged.d[k]) merged.d[k] = res.d[k];
+          const base = merged.items.length;
+          res.items.forEach((it) => merged.items.push({ ...it, photoBlobs: [] }));
+          const mine = merged.items.slice(base);
+          for (const ph of res.photos || []) {
+            if (!mine.length) break;
+            const tgt = mine.reduce((best, it) => Math.abs(it.row - ph.row) < Math.abs(best.row - ph.row) ? it : best, mine[0]);
+            tgt.photoBlobs.push(ph.blob);
+          }
+        } catch (e) { merged.failed.push(`${f.name} (${e.message || "couldn't be read"})`); }
+      }
+    } finally { btn.disabled = false; btn.textContent = "Import"; }
+    for (const f of looseImages) merged.items.push({ description: f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").slice(0, 300), size: "", qty: 1, price: null, photoBlobs: [f] });
+    if (!merged.names.length) { toast(merged.failed.length ? `Couldn't import: ${merged.failed.join("; ")}` : "Nothing to import."); return; }
+    await applyImport(merged);
+  }
+
+  async function applyImport(m) {
+    const d = m.d;
+    openAdd();
+    const ed = addEd;
+    if (d.name) $("aName").value = d.name.slice(0, 200);
+    if (d.company && COMPANIES.includes(d.company)) $("aCompany").value = d.company;
+    if (d.paymentStatus && PAYMENTS.includes(d.paymentStatus)) $("aPay").value = d.paymentStatus;
+    if (d.address) $("aAddress").value = d.address.slice(0, 1000);
+    if (d.invoice) $("aInvoice").value = d.invoice.slice(0, 100);
+    if (d.jo) $("aJo").value = d.jo.slice(0, 100);
+    const remarks = d.remarks || d.rawText || ""; if (remarks) $("aRemarks").value = remarks.slice(0, 1000);
+    if (m.items.length) ed.load(m.items.slice(0, 50).map((it) => ({ description: it.description, size: it.size, qty: it.qty, unit_price: it.price, photos: [] })));
+    const found = [d.name && "name", d.company && "company", d.address && "address", (d.invoice || d.jo) && "invoice/JO no.", m.items.length && `${m.items.length} item${m.items.length === 1 ? "" : "s"}`].filter(Boolean);
+    const note = $("aImportNote");
+    note.textContent = `Imported from ${m.names.join(", ")}. Found: ${found.length ? found.join(", ") : "no recognisable details"}. Check everything, then press Add order.` + (m.failed.length ? ` Skipped: ${m.failed.join("; ")}.` : "");
+    note.hidden = false;
+    let n = 0, lost = 0;
+    for (let i = 0; i < Math.min(m.items.length, 50); i++) for (const blob of m.items[i].photoBlobs || []) {
+      if (addEd !== ed) return;
+      try { if (await ed.attach(i, blob)) n++; else lost++; } catch (e) { lost++; }
+    }
+    if (lost) toast(`${lost} photo${lost === 1 ? "" : "s"} couldn't be attached (6 per item max, or unreadable).`);
+    else if (n) toast(`Imported ${n} photo${n === 1 ? "" : "s"}.`);
+  }
+
+  $("importBtn").addEventListener("click", () => $("importFile").click());
+  $("importFile").addEventListener("change", (e) => { const fs = e.target.files; importFiles(fs).finally(() => { e.target.value = ""; }); });
 
   /* ---------- team access ---------- */
   function openIam() {
