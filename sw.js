@@ -1,4 +1,4 @@
-const VERSION = "mrph-v3";
+const VERSION = "mrph-v4";
 const SHELL = ["./", "index.html", "billing.html", "config.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png"];
 const CDN = /^https:\/\/(cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
 

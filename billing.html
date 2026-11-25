@@ -164,13 +164,18 @@
   .toast.show{opacity:1}
   .muted{color:var(--muted)}
 
+  body.embed{background:#fff}
+  body.embed header.top,body.embed .editor,body.embed .toast{display:none!important}
+  body.embed main{display:block;padding:0}
+  body.embed .paperWrap{overflow:visible}
+  body.embed #paper{box-shadow:none;margin:0;width:210mm;zoom:var(--fit,1)}
   @media print{
     @page{size:A4;margin:0}
     body{background:#fff}
     header.top,.editor,.modal,.toast{display:none!important}
     main{display:block;padding:0}
     .paperWrap{overflow:visible}
-    #paper{box-shadow:none;width:210mm;min-height:auto;margin:0;zoom:1}
+    #paper{box-shadow:none;width:210mm;min-height:auto;margin:0;zoom:1!important}
     #paper,#paper *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .jo-item{break-inside:avoid;page-break-inside:avoid}
   }
@@ -713,7 +718,21 @@
     toast(!ok ? "Couldn't save — browser storage is full or blocked"
        : isNew ? `Invoice ${inv.number} created — next will be ${nextInvoiceNumber(inv.date)}` : jo ? `Updated ${inv.number} and ${jo.number}` : `Updated ${inv.number}`);
   }
-  $('#btnSave').onclick = saveInvoice;
+  $('#btnSave').onclick = async () => {
+    const wasNew = !inv.savedAt; await saveInvoice();
+    if(inv.savedAt && inv.orderId && !dirty && (wasNew || fromOrder)) backToOrder('INV');
+  };
+  let fromOrder = false;
+  function backToOrder(doc){
+    const id = (mode==='JO' ? records.find(r => r.id===joInvoiceId)?.orderId : inv.orderId) || '';
+    location.href = id ? `./?order=${encodeURIComponent(id)}${doc ? '&doc=' + doc : ''}` : './';
+  }
+  $('#backOrders').onclick = e => {
+    const id = mode==='JO' ? records.find(r => r.id===joInvoiceId)?.orderId : inv.orderId;
+    if(!id) return; e.preventDefault();
+    if(dirty && !confirmLite('Leave without saving the invoice?')) return;
+    dirty = false; backToOrder(mode==='JO' ? 'JO' : (inv.savedAt ? 'INV' : ''));
+  };
   document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey) && e.key==='s'){ e.preventDefault(); if(mode==='INV') saveInvoice(); } });
   const confirmLite = m => { try{ return window.confirm(m); }catch(e){ return true; } };
   $('#btnNew').onclick = () => { if(dirty && !confirmLite('Discard unsaved changes?')) return; inv = blankInvoice(inv.companyId); dirty=false; fillForm(); };
@@ -725,6 +744,7 @@
     const jo = buildJO(i); records.unshift(jo); await saveRecords(); noteNumber('JO', null, jo.number);
     await linkOrder(i.orderId, {job_order_no: jo.number});
     renderJoInvoiceSelect(); refresh(); toast(`Job order ${jo.number} created`);
+    if(i.orderId) setTimeout(() => { location.href = `./?order=${encodeURIComponent(i.orderId)}&doc=JO`; }, 350);
   };
 
   // ---------- print ----------
@@ -874,15 +894,38 @@
     try{ navigator.serviceWorker.register('sw.js').catch(() => {}); }catch(e){}
   }
   renderCompanySelects();
+  const P = new URLSearchParams(location.search);
+  if(P.get('embed')){
+    document.body.classList.add('embed');
+    const fit = () => document.documentElement.style.setProperty('--fit', String(Math.min(1.4, (window.innerWidth || 794) / 794)));
+    fit(); window.addEventListener('resize', fit);
+    const showDoc = () => {
+      const i = records.find(r => r.type==='INV' && r.id===P.get('id'));
+      const d = !i ? null : P.get('doc')==='JO' ? joFor(i.id) : i;
+      if(!d){ $('#paper').innerHTML = '<p class="muted" style="text-align:center;padding:60px 20px;font-size:22px">Not found on this device.</p>'; return; }
+      document.title = `${d.number} - ${d.custName || 'client'}`;
+      renderPaper(d);
+    };
+    showDoc();
+    window.addEventListener('message', async e => {
+      if(e.origin !== location.origin) return;
+      if(e.data === 'print'){ try{ window.print(); }catch(err){} }
+      if(e.data === 'reload'){ records = ((await DB.get('records')) || []).map(cleanRecord).filter(Boolean); showDoc(); }
+    });
+    window.parent && window.parent.postMessage({mrphDoc:'ready'}, location.origin);
+    return;
+  }
   inv = blankInvoice(companies[0].id);
   fillForm(); setMode('INV');
   const ho = await DB.get('handoff');
   if(ho && ho.orderId && Date.now() - (ho.at||0) < 30*60*1000){
     await DB.set('handoff', null);
     const found = invoices().find(r => r.orderId===ho.orderId) || (ho.invoiceNo ? invoices().find(r => r.number===ho.invoiceNo) : null);
+    fromOrder = true;
     if(found){
       if(!found.orderId){ found.orderId = str(ho.orderId,64); found.orderNo = str(ho.orderNo,40); await saveRecords(); }
-      if(ho.want==='JO'){ joInvoiceId = found.id; setMode('JO'); }
+      if(ho.want==='JO-create'){ joInvoiceId = found.id; setMode('JO'); if(!joFor(found.id)) $('#btnCreateJO').click(); else location.replace(`./?order=${encodeURIComponent(found.orderId)}&doc=JO`); }
+      else if(ho.want==='JO'){ joInvoiceId = found.id; setMode('JO'); }
       else { inv = clone(found); dirty = false; fillForm(); }
     } else {
       const coId = ho.company==='Cebu Mirrors' ? 'cebumirrors' : ho.company==='Mirrora' ? 'mirrora' : inv.companyId;
@@ -892,7 +935,7 @@
       const its = (Array.isArray(ho.items) ? ho.items : []).slice(0,200).map(i => ({ name: str(i.name), dims: str(i.dims), details: str(i.details), qty: num(i.qty)||1, price: num(i.price), photo: safeImg(i.photo) }));
       if(its.length) inv.items = its;
       dirty = true; fillForm();
-      toast(ho.want==='JO' ? `Filled in from ${ho.orderNo || 'the order'} — press Create invoice, then Create job order` : `Filled in from ${ho.orderNo || 'the order'} — check it, then press Create invoice`);
+      toast(ho.want!=='INV' ? `Filled in from ${ho.orderNo || 'the order'} — press Create invoice, then Create job order` : `Filled in from ${ho.orderNo || 'the order'} — check it, then press Create invoice`);
     }
   }
 })();

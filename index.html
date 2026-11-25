@@ -235,6 +235,12 @@ select.pill option { background: var(--bg); color: var(--ink); }
 .win.view .split > .pane:first-child { display: none; }
 .win.view .split > .pane + .pane { border-left: 0; }
 .win.view .preview { max-height: 66%; }
+@media (min-width: 761px) { #docWin { width: min(860px, calc(100vw - 24px)); height: min(900px, calc(100% - 24px)); } }
+.doctabs { display: flex; gap: 6px; padding: 8px 18px; border-bottom: 1px solid var(--line); }
+.docbody { flex: 1; min-height: 0; overflow: auto; background: #e9ebef; padding: 14px; }
+.docbody iframe { display: block; width: 100%; border: 0; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.14); border-radius: 4px; }
+.docempty { display: grid; justify-items: center; gap: 12px; padding: 60px 16px; text-align: center; color: #3b4048; }
+@media (max-width: 760px) { .docbody { padding: 8px; } }
 .win.xl:not(.view) .ptabs, .win.xl:not(.view) .tpane { display: none !important; }
 .win.xl:not(.view) .preview { max-height: none; flex: 1 1 auto; border-bottom: 0; }
 @media (min-width: 761px) { .win.xl.view { width: min(680px, calc(100vw - 24px)); } }
@@ -588,6 +594,18 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
     </div>
   </form>
 </section>
+<section class="win xl" id="docWin" role="dialog" aria-modal="true" aria-labelledby="docTitle" hidden>
+  <div class="win-head" data-drag>
+    <div><span class="kicker" id="docKicker"></span><h2 id="docTitle">Invoice</h2></div>
+    <button class="x" type="button" data-close aria-label="Close">×</button>
+  </div>
+  <div class="doctabs" role="group" aria-label="Document">
+    <button class="ptab" type="button" id="docTabInv" aria-pressed="true">Invoice</button>
+    <button class="ptab" type="button" id="docTabJo" aria-pressed="false">Job order</button>
+  </div>
+  <div class="docbody" id="docBody"></div>
+  <div class="win-foot" id="docFoot"></div>
+</section>
 <div class="lightbox" id="lightbox" hidden role="dialog" aria-label="Photo"><img alt="Item photo"><span class="lbclose">Tap anywhere to close</span></div>
 
 <section class="win lg" id="iamWin" role="dialog" aria-modal="true" aria-labelledby="iTitle" hidden>
@@ -860,7 +878,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     const { data, error } = await sb.from("orders").select("*").order("created_at", { ascending: false }).limit(2000);
     const note = $("loadNote");
     if (error) { note.textContent = "Couldn't load orders. " + (/fetch|network/i.test(error.message) ? "Check your connection." : "Reload the page."); note.hidden = false; S.loaded = true; paint(); return; }
-    note.hidden = true; S.orders = (data || []).map(norm); S.loaded = true; paint(); applyBillingLinks();
+    note.hidden = true; S.orders = (data || []).map(norm); S.loaded = true; paint(); applyBillingLinks().then(openPending);
   }
   async function loadPeople() {
     const { data } = await sb.from("profiles").select("id,name,email,role");
@@ -1303,6 +1321,55 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     await BillDB.set("handoff", { at: Date.now(), want, orderId: o.id, orderNo: o.orderNo || "", name: o.name || "", company: o.company || "", address: o.address || "", contact: contact.trim(), invoiceNo: o.invoiceNo || "", jobOrderNo: o.jobOrderNo || "", items: out });
     location.href = "billing.html";
   }
+  async function billingRecords() { const r = await BillDB.get("records"); return Array.isArray(r) ? r : []; }
+  async function findDocs(o) {
+    const recs = await billingRecords();
+    const inv = recs.find((r) => r.type === "INV" && r.orderId === o.id) || (o.invoiceNo ? recs.find((r) => r.type === "INV" && r.number === o.invoiceNo) : null) || null;
+    const jo = inv ? recs.find((r) => r.type === "JO" && r.invoiceId === inv.id) || null : null;
+    return { inv, jo };
+  }
+  let docState = null;
+  async function openDoc(o, doc, btn) {
+    const { inv } = await findDocs(o);
+    if (!inv) { toBilling(o, doc === "JO" ? "JO" : "INV", btn); return; }
+    docState = { o, doc }; await paintDoc(); openWin($("docWin"));
+  }
+  async function paintDoc() {
+    if (!docState) return;
+    const { o, doc } = docState; const { inv, jo } = await findDocs(o);
+    $("docKicker").textContent = `${o.orderNo || ""} · ${o.name || ""}`;
+    $("docTabInv").setAttribute("aria-pressed", doc === "INV"); $("docTabJo").setAttribute("aria-pressed", doc === "JO");
+    $("docTabInv").textContent = inv ? `Invoice ${inv.number}` : "Invoice"; $("docTabJo").textContent = jo ? `Job order ${jo.number}` : "Job order";
+    const body = $("docBody"), foot = $("docFoot");
+    const show = doc === "JO" ? jo : inv;
+    $("docTitle").textContent = show ? show.number : "Job order";
+    const editBtn = h("button", { class: "btn", type: "button", text: "Edit invoice", onclick: (e) => toBilling(o, "INV", e.currentTarget) });
+    if (!show) {
+      body.replaceChildren(h("div", { class: "docempty" }, h("b", { text: "No job order yet" }), h("span", { text: `It will copy the client, items, photos and deadline from ${inv.number}.` }),
+        h("button", { class: "btn go", type: "button", text: "Create job order", onclick: (e) => toBilling(o, "JO-create", e.currentTarget) })));
+      foot.replaceChildren(h("div", { class: "right", style: "margin-left:0;margin-right:auto" }, editBtn), h("div", { class: "right" }, h("button", { class: "btn", type: "button", "data-close": true, text: "Close" })));
+      return;
+    }
+    const fr = h("iframe", { title: show.number, src: `billing.html?embed=1&id=${encodeURIComponent(inv.id)}&doc=${doc}` });
+    const fit = () => { try { const d = fr.contentDocument; if (d && d.body) fr.style.height = Math.max(400, d.documentElement.scrollHeight) + "px"; } catch (e) {} };
+    fr.addEventListener("load", () => { fit(); setTimeout(fit, 300); setTimeout(fit, 1200); });
+    body.replaceChildren(fr); body.scrollTop = 0;
+    foot.replaceChildren(h("div", { class: "right", style: "margin-left:0;margin-right:auto" }, editBtn),
+      h("div", { class: "right" }, h("button", { class: "btn", type: "button", text: "Close", "data-close": true }),
+        h("button", { class: "btn go", type: "button", text: "Print / Save PDF", onclick: () => { try { fr.contentWindow.postMessage("print", location.origin); } catch (e) {} } })));
+  }
+  $("docTabInv").addEventListener("click", () => { if (docState) { docState.doc = "INV"; paintDoc(); } });
+  $("docTabJo").addEventListener("click", () => { if (docState) { docState.doc = "JO"; paintDoc(); } });
+  window.addEventListener("resize", () => { const fr = $("docBody").querySelector("iframe"); if (fr && fr.contentDocument) setTimeout(() => { try { fr.style.height = Math.max(400, fr.contentDocument.documentElement.scrollHeight) + "px"; } catch (e) {} }, 150); });
+  let pendingOpen = (() => { const p = new URLSearchParams(location.search); return p.get("order") ? { id: p.get("order"), doc: p.get("doc") } : null; })();
+  if (pendingOpen) history.replaceState(null, "", location.pathname);
+  function openPending() {
+    if (!pendingOpen || !S.loaded) return;
+    const { id, doc } = pendingOpen; pendingOpen = null;
+    const o = S.orders.find((x) => x.id === id); if (!o) return;
+    openDetail(id);
+    if (doc === "INV" || doc === "JO") openDoc(o, doc);
+  }
   let linking = false;
   async function applyBillingLinks() {
     if (linking || !S.loaded || !can.edit()) return; linking = true;
@@ -1403,8 +1470,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       snapshotVals = null; detailEd = null; applyMode();
       $("viewFoot").replaceChildren(
         h("div", { class: "right", style: "margin-left:0;margin-right:auto;flex-wrap:wrap" },
-          h("button", { class: "btn", type: "button", text: o.invoiceNo ? `Invoice ${o.invoiceNo}` : "Create invoice", onclick: (e) => toBilling(o, "INV", e.currentTarget) }),
-          h("button", { class: "btn", type: "button", text: o.jobOrderNo ? `Job order ${o.jobOrderNo}` : "Create job order", onclick: (e) => toBilling(o, "JO", e.currentTarget) })),
+          h("button", { class: "btn", type: "button", text: o.invoiceNo ? `Invoice ${o.invoiceNo}` : "Create invoice", onclick: (e) => openDoc(o, "INV", e.currentTarget) }),
+          h("button", { class: "btn", type: "button", text: o.jobOrderNo ? `Job order ${o.jobOrderNo}` : "Create job order", onclick: (e) => openDoc(o, "JO", e.currentTarget) })),
         h("div", { class: "right" }, h("button", { class: "btn", type: "button", "data-close": true, text: "Close" }), can.edit() ? h("button", { class: "btn go", type: "button", text: "Edit", onclick: startEdit }) : null));
       return;
     }
