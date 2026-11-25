@@ -168,6 +168,7 @@ tr.clickrow { cursor: pointer; }
 .s-prod { background: var(--st-prod-bg); color: var(--st-prod-fg); }
 .p-paid { background: var(--st-done-bg); color: var(--st-done-fg); }
 .p-partial { background: var(--st-pending-bg); color: var(--st-pending-fg); }
+.p-unpaid { background: var(--st-cancel-bg); color: var(--st-cancel-fg); }
 .co { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
 .co-mirrora { background: var(--st-progress-bg); color: var(--st-progress-fg); }
 .co-cebu { background: var(--st-delivery-bg); color: var(--st-delivery-fg); }
@@ -233,12 +234,23 @@ select.pill option { background: var(--bg); color: var(--ink); }
 .win.view .split { grid-template-columns: minmax(0, 1fr); }
 .win.view .split > .pane:first-child { display: none; }
 .win.view .split > .pane + .pane { border-left: 0; }
-.win.view .preview { max-height: 58%; }
+.win.view .preview { max-height: 66%; }
+.win.xl:not(.view) .ptabs, .win.xl:not(.view) .tpane { display: none !important; }
+.win.xl:not(.view) .preview { max-height: none; flex: 1 1 auto; border-bottom: 0; }
 @media (min-width: 761px) { .win.xl.view { width: min(680px, calc(100vw - 24px)); } }
-.preview { flex: 0 1 auto; max-height: 54%; overflow-y: auto; padding: 14px 16px; display: grid; gap: 12px; align-content: start; background: var(--bg); border-bottom: 1px solid var(--line); }
-.pvhero { height: 130px; border-radius: 10px; overflow: hidden; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+.preview { flex: 0 1 auto; max-height: 62%; overflow-y: auto; padding: 14px 16px; display: grid; gap: 12px; align-content: start; background: var(--bg); border-bottom: 1px solid var(--line); }
+.pvgallery { display: grid; gap: 8px; }
+.pvthumbs { display: flex; gap: 6px; overflow-x: auto; }
+.pvthumb { all: unset; flex: none; width: 52px; height: 52px; border-radius: 7px; overflow: hidden; border: 2px solid transparent; cursor: pointer; background: var(--panel); }
+.pvthumb[aria-pressed="true"] { border-color: var(--link); }
+.pvthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pvhead { display: grid; gap: 2px; }
+.pvhead .mono { font-size: 12px; color: var(--muted); }
+.pvhead strong { font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
+.pvhero { height: 260px; border-radius: 10px; overflow: hidden; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); font-size: 13px; }
 .pvhero button { all: unset; cursor: zoom-in; display: block; width: 100%; height: 100%; }
-.pvhero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pvhero img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.pvhero.empty { height: 120px; }
 .pvhero .ph { display: grid; justify-items: center; gap: 4px; }
 .pvhero .ph b { font-size: 26px; opacity: .55; }
 .pvtags { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -255,7 +267,13 @@ select.pill option { background: var(--bg); color: var(--ink); }
 .pvitem .d { font-size: 12.5px; color: var(--muted); }
 .pvitem .amt { font-weight: 600; }
 .pvtotal { display: flex; justify-content: space-between; align-items: baseline; padding-top: 8px; border-top: 2px solid var(--line); font-weight: 700; }
-@media (max-width: 760px) { .preview { max-height: none; } }
+@media (max-width: 760px) {
+  .preview { max-height: none; }
+  .win.xl:not(.view) .split { display: flex; flex-direction: column; }
+  .win.xl:not(.view) .split > .pane { flex: none; }
+  .win.xl:not(.view) .split > .pane + .pane { order: -1; border-top: 0; border-bottom: 1px solid var(--line); }
+  .pvhero { height: 220px; }
+}
 .panehead { padding: 10px 16px; font-size: 13px; font-weight: 700; color: var(--muted); border-bottom: 1px solid var(--line); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
 @media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
@@ -556,7 +574,7 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
       <div class="field"><label for="aCompany">Company</label>
         <select id="aCompany"><option value="" selected disabled>Choose…</option><option>Mirrora</option><option>Cebu Mirrors</option></select></div>
       <div class="field"><label for="aPay">Payment status</label>
-        <select id="aPay"><option value="" selected disabled>Choose…</option><option>Partial Payment</option><option>Fully Paid</option></select></div>
+        <select id="aPay"><option selected>Unpaid</option><option>Partial Payment</option><option>Fully Paid</option></select></div>
       <div class="field"><label for="aAddress">Address</label><textarea id="aAddress" placeholder="Delivery or site address"></textarea></div>
       <div class="field"><label for="aInvoice">Invoice No.</label><input id="aInvoice" autocomplete="off" maxlength="100"></div>
       <div class="field"><label for="aJo">Job Order No.</label><input id="aJo" autocomplete="off" maxlength="100"></div>
@@ -677,11 +695,11 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   const STATUSES = ["Pending", "For Invoice Creation", "For JO Creation", "In Production", "For Delivery", "Completed", "Cancelled"];
   const STATUS_CLASS = { "Pending": "s-pending", "For Invoice Creation": "s-progress", "For JO Creation": "s-jo", "In Production": "s-prod", "For Delivery": "s-delivery", "Completed": "s-done", "Cancelled": "s-cancel" };
   const STATUS_DOT = { "Pending": "var(--st-pending-fg)", "For Invoice Creation": "var(--st-progress-fg)", "For JO Creation": "var(--st-jo-fg)", "In Production": "var(--st-prod-fg)", "For Delivery": "var(--st-delivery-fg)", "Completed": "var(--st-done-fg)", "Cancelled": "var(--st-cancel-fg)" };
-  const PAYMENTS = ["Partial Payment", "Fully Paid"];
+  const PAYMENTS = ["Unpaid", "Partial Payment", "Fully Paid"];
   const COMPANIES = ["Mirrora", "Cebu Mirrors"];
   const CO_CLASS = { "Mirrora": "co-mirrora", "Cebu Mirrors": "co-cebu" };
   const coPill = (c) => c ? h("span", { class: "co " + (CO_CLASS[c] || ""), text: c }) : h("span", { class: "blank", text: "—" });
-  const PAY_CLASS = { "Fully Paid": "p-paid", "Partial Payment": "p-partial" };
+  const PAY_CLASS = { "Fully Paid": "p-paid", "Partial Payment": "p-partial", "Unpaid": "p-unpaid" };
   const OVERDUE_MS = 3 * 24 * 60 * 60 * 1000;
   const unpaidDays = (o) => Math.floor((Date.now() - (o.paymentSince || o.createdAt || Date.now())) / 86400000);
   const isDone = (o) => o.status === "Completed";
@@ -836,7 +854,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     return { id: o.id, orderNo: o.order_no, name: o.name, items: o.items, address: o.address, amount: o.amount == null ? null : Number(o.amount),
       invoiceNo: o.invoice_no, jobOrderNo: o.job_order_no, status: o.status, remarks: o.remarks, assignee: o.assignee,
       createdBy: o.created_by, createdAt: ts(o.created_at), updatedBy: o.updated_by, updatedAt: ts(o.updated_at),
-      commentCount: o.comment_count, lastCommentAt: ts(o.last_comment_at), paymentStatus: o.payment_status || "Partial Payment", paymentSince: ts(o.payment_since), company: o.company || "" };
+      commentCount: o.comment_count, lastCommentAt: ts(o.last_comment_at), paymentStatus: PAYMENTS.includes(o.payment_status) ? o.payment_status : "Unpaid", paymentSince: ts(o.payment_since), company: o.company || "" };
   }
   async function loadOrders() {
     const { data, error } = await sb.from("orders").select("*").order("created_at", { ascending: false }).limit(2000);
@@ -885,9 +903,9 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   const activeIds = () => Object.values(S.people).filter((p) => ACTIVE.includes(p.role) || p.email === OWNER_EMAIL.toLowerCase()).map((p) => p.id);
 
   /* ---------- views ---------- */
-  function inView(o) { if (S.view.startsWith("st:")) return o.status === S.view.slice(3); if (isDone(o)) return false; if (S.view === "mine") return o.assignee === S.user.id; if (S.view.startsWith("co:")) return o.company === S.view.slice(3); if (S.view === "pay:partial") return o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled"; if (S.view === "pay:overdue") return isOverdue(o); return true; }
+  function inView(o) { if (S.view.startsWith("st:")) return o.status === S.view.slice(3); if (isDone(o)) return false; if (S.view === "mine") return o.assignee === S.user.id; if (S.view.startsWith("co:")) return o.company === S.view.slice(3); if (S.view === "pay:partial") return o.paymentStatus === "Partial Payment" && o.status !== "Cancelled"; if (S.view === "pay:unpaid") return o.paymentStatus === "Unpaid" && o.status !== "Cancelled"; if (S.view === "pay:overdue") return isOverdue(o); return true; }
   function filtered() { const q = S.q.trim().toLowerCase(); return S.orders.filter((o) => inView(o) && (!q || [o.name, o.company, o.orderNo, o.items, o.invoiceNo, o.jobOrderNo, o.remarks, o.address].some((v) => String(v || "").toLowerCase().includes(q)))); }
-  const viewTitle = () => S.view.startsWith("co:") ? S.view.slice(3) : S.view === "pay:partial" ? "Partial payment" : S.view === "pay:overdue" ? "Unpaid 3+ days" : S.view === "mine" ? "Assigned to me" : S.view === "updates" ? "Updates" : S.view.startsWith("st:") ? S.view.slice(3) : "All orders";
+  const viewTitle = () => S.view.startsWith("co:") ? S.view.slice(3) : S.view === "pay:partial" ? "Partial payment" : S.view === "pay:unpaid" ? "Unpaid" : S.view === "pay:overdue" ? "Unpaid 3+ days" : S.view === "mine" ? "Assigned to me" : S.view === "updates" ? "Updates" : S.view.startsWith("st:") ? S.view.slice(3) : "All orders";
 
   function paintNav() {
     const nav = $("nav"); nav.replaceChildren();
@@ -900,7 +918,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       ...COMPANIES.map((c) => btn("co:" + c, h("span", { class: "sd", style: `background:var(--st-${c === "Mirrora" ? "progress" : "delivery"}-fg)` }), c, live.filter((o) => o.company === c).length)),
       h("div", { class: "navhead", text: "Status" }), ...STATUSES.map((s) => btn("st:" + s, h("span", { class: "sd", style: `background:${STATUS_DOT[s]}` }), s, counts[s])),
       h("div", { class: "navhead", text: "Payment" }),
-      btn("pay:partial", h("span", { class: "sd", style: "background:var(--st-pending-fg)" }), "Partial payment", live.filter((o) => o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled").length),
+      btn("pay:unpaid", h("span", { class: "sd", style: "background:var(--st-cancel-fg)" }), "Unpaid", live.filter((o) => o.paymentStatus === "Unpaid" && o.status !== "Cancelled").length),
+      btn("pay:partial", h("span", { class: "sd", style: "background:var(--st-pending-fg)" }), "Partial payment", live.filter((o) => o.paymentStatus === "Partial Payment" && o.status !== "Cancelled").length),
       (() => { const n = live.filter(isOverdue).length; const b = btn("pay:overdue", h("span", { class: "ic", text: "!" }), "Unpaid 3+ days", null); if (n) b.append(h("span", { class: "badge red", text: String(n) })); else b.append(h("span", { class: "n", text: "0" })); return b; })());
     nav.append(h("div", { class: "navhead", text: "Billing" }), h("a", { class: "navbtn", href: "billing.html", style: "text-decoration:none" }, h("span", { class: "ic", text: "₱" }), h("span", { class: "lab", text: "Invoices & Job Orders" })));
     if (installEvt) nav.append(h("button", { class: "navbtn", type: "button", onclick: async () => { const e = installEvt; installEvt = null; paintNav(); e.prompt(); try { await e.userChoice; } catch (x) {} } }, h("span", { class: "ic", text: "⤓" }), h("span", { class: "lab", text: "Install app" })));
@@ -1007,7 +1026,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     }
   }
   async function updateOrder(id, patch) {
-    const { data, error } = await sb.from("orders").update(patch).eq("id", id).select("id");
+    let { data, error } = await sb.from("orders").update(patch).eq("id", id).select("id");
+    if (error && patch.payment_status === "Unpaid") ({ data, error } = await sb.from("orders").update({ ...patch, payment_status: null }).eq("id", id).select("id"));
     if (error) throw error; if (!data || !data.length) throw REFUSED;
   }
   async function setStatus(id, s) {
@@ -1128,11 +1148,12 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
 
   /* ---------- items editor ---------- */
   const money = (n) => (typeof n === "number" && isFinite(n)) ? peso.format(n) : "—";
-  function itemsEditor(orderId, items) {
+  function itemsEditor(orderId, items, onChange) {
     const st = { rows: [], uploading: 0, uploaded: [] };
     const toRow = (r) => ({ key: crypto.randomUUID(), description: r.description || "", size: r.size || "", backlights: !!r.backlights, colors: r.backlights ? ((r.backlight_colors && r.backlight_colors.length) ? [...r.backlight_colors] : [""]) : [], qty: r.qty == null ? "1" : String(Number(r.qty)), price: r.unit_price == null ? "" : String(Number(r.unit_price)), photos: [...(r.photos || [])] });
     st.rows = (items && items.length ? items : [{}]).map(toRow);
     const list = h("div", { class: "irows" });
+    if (onChange) list.addEventListener("input", () => onChange());
     const totalEl = h("span", { class: "itotal mono" });
     const busyEl = h("span", { class: "meta", "aria-live": "polite" });
     const errEl = h("div", { class: "err", role: "alert" });
@@ -1142,12 +1163,29 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       list.querySelectorAll("[data-ltotal]").forEach((el) => { const r = st.rows.find((x) => x.key === el.dataset.ltotal); el.textContent = r ? money(lineTotal(r)) : ""; });
       totalEl.textContent = money(total());
       busyEl.textContent = st.uploading ? `Uploading ${st.uploading} photo${st.uploading === 1 ? "" : "s"}…` : "";
+      if (onChange) onChange();
     }
     function photoStrip(r) {
       const strip = h("div", { class: "iphotos" });
       const draw = () => {
-        strip.replaceChildren(...r.photos.map((p) => thumb(p, () => { r.photos = r.photos.filter((x) => x !== p); draw(); })));
-        strip.hidden = !r.photos.length;
+        const kids = r.photos.map((p) => thumb(p, () => { r.photos = r.photos.filter((x) => x !== p); draw(); }));
+        if (r.photos.length < MAX_PHOTOS) {
+          const inp = h("input", { type: "file", accept: "image/*", multiple: true, hidden: true });
+          inp.addEventListener("change", async () => {
+            const files = [...inp.files].slice(0, MAX_PHOTOS - r.photos.length); inp.value = ""; if (!files.length) return;
+            errEl.textContent = "";
+            for (const f of files) {
+              if (r.photos.length >= MAX_PHOTOS) break;
+              st.uploading++; refreshTotals();
+              try { const p = await uploadPhoto(orderId, f); st.uploaded.push(p); r.photos.push(p); }
+              catch (e) { errEl.textContent = e.message || "Upload failed."; }
+              finally { st.uploading--; refreshTotals(); draw(); }
+            }
+          });
+          kids.push(h("label", { class: "addphoto", title: `Up to ${MAX_PHOTOS} photos per item` }, inp, r.photos.length ? "+ Photo" : "+ Add photo"));
+        }
+        strip.replaceChildren(...kids);
+        if (onChange) onChange();
       };
       draw(); return strip;
     }
@@ -1204,6 +1242,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
         return true;
       },
       allPhotos: () => st.rows.flatMap((r) => r.photos),
+      rows: () => st.rows.map((r) => ({ description: r.description.trim(), size: r.size.trim(), backlights: r.backlights, backlight_colors: r.colors.filter((c) => c.trim()), qty: r.qty === "" ? 1 : Number(r.qty), unit_price: r.price === "" || !isFinite(Number(r.price)) ? null : Number(r.price), photos: r.photos.slice() })),
       sizes: () => st.rows.map((r) => r.size.trim().slice(0, 80)),
       flags: () => st.rows.map((r) => ({ on: !!r.backlights, colors: r.backlights ? r.colors.map((c) => c.trim().slice(0, 40)) : [] })),
       validate() {
@@ -1315,16 +1354,25 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     if (S.history.length) out.push(h("details", null, h("summary", { text: `Change history (${S.history.length})` }), h("ul", { class: "hist" }, S.history.map((x) => h("li", null, h("time", { text: fmtTime(Date.parse(x.created_at)) }), h("span", null, h("b", { text: nameOf(x.actor) }), " " + x.summary))))));
     return out;
   }
+  let pvTimer = null, pvPhoto = null;
+  function livePreview() { clearTimeout(pvTimer); pvTimer = setTimeout(() => { if (S.editing) paintPreview(); }, 120); }
   function paintPreview() {
-    const box = $("preview"); const o = S.orders.find((x) => x.id === S.openId);
-    if (!o) { box.replaceChildren(); return; }
-    const items = S.items;
-    const firstPhoto = (items || []).flatMap((r) => r.photos || [])[0];
+    const box = $("preview"); const saved = S.orders.find((x) => x.id === S.openId);
+    if (!saved) { box.replaceChildren(); return; }
+    const f = S.editing ? readForm() : null;
+    const o = f ? { ...saved, ...Object.fromEntries(Object.entries(f).map(([k, v]) => [k, typeof v === "string" ? v.trim() : v])) } : saved;
+    if (f && !PAYMENTS.includes(o.paymentStatus)) o.paymentStatus = "Unpaid";
+    const items = S.editing && detailEd && detailEd.rows ? detailEd.rows() : S.items;
+    const photos = (items || []).flatMap((r) => r.photos || []);
+    if (!photos.includes(pvPhoto)) pvPhoto = photos[0] || null;
     const pic = (path, cls) => {
       const img = h("img", { alt: "Item photo" }); signedUrls([path]).then(([u]) => { if (u) img.src = u; });
       return h("button", { class: cls, type: "button", "aria-label": "View photo", onclick: () => openLightbox(path) }, img);
     };
-    const hero = firstPhoto ? h("div", { class: "pvhero" }, pic(firstPhoto)) : null;
+    const hero = h("div", { class: "pvgallery" },
+      h("div", { class: "pvhero" + (pvPhoto ? "" : " empty") }, pvPhoto ? pic(pvPhoto) : h("div", { class: "ph" }, h("b", { text: "▭" }), h("span", { text: S.editing ? "No mirror photo yet. Use + Add photo on an item." : "No mirror photo yet" }))),
+      photos.length > 1 ? h("div", { class: "pvthumbs" }, photos.map((p) => { const img = h("img", { alt: "" }); signedUrls([p]).then(([u]) => { if (u) img.src = u; }); return h("button", { type: "button", class: "pvthumb", "aria-pressed": p === pvPhoto ? "true" : "false", "aria-label": "Show this photo", onclick: () => { pvPhoto = p; paintPreview(); } }, img); })) : null);
+    const head = h("div", { class: "pvhead" }, h("span", { class: "mono", text: saved.orderNo || "" }), h("strong", { text: o.name || "Untitled" }));
     const tags = h("div", { class: "pvtags" }, h("span", { class: "pill " + (STATUS_CLASS[o.status] || "s-hold"), text: o.status }), o.company ? coPill(o.company) : null,
       h("span", { class: "pill " + (PAY_CLASS[o.paymentStatus] || ""), text: o.paymentStatus }), isOverdue(o) ? h("span", { class: "latetag", text: `Unpaid ${unpaidDays(o)} days` }) : null);
     let t = 0, any = false;
@@ -1337,8 +1385,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
           h("div", null, h("b", { text: r.description || "Untitled item" }), h("span", { class: "d", text: bits })), h("span", { class: "amt mono", text: money(l) }));
       }));
     const total = any ? Math.round(t * 100) / 100 : o.amount;
-    const meta = [["Assignee", o.assignee ? nameOf(o.assignee) : "Unassigned"], ["Invoice No.", o.invoiceNo || "—"], ["Job Order No.", o.jobOrderNo || "—"], ["Address", o.address], ["Remarks", o.remarks]].filter(([, v]) => v);
-    box.replaceChildren(...[hero].filter(Boolean), tags, list, h("div", { class: "pvtotal" }, h("span", { text: "Total" }), h("span", { class: "itotal mono", text: money(total) })),
+    const meta = [["Company", o.company || "—"], ["Assignee", o.assignee ? nameOf(o.assignee) : "Unassigned"], ["Invoice No.", o.invoiceNo || "—"], ["Job Order No.", o.jobOrderNo || "—"], ["Address", o.address], ["Remarks", o.remarks]].filter(([, v]) => v);
+    box.replaceChildren(hero, head, tags, list, h("div", { class: "pvtotal" }, h("span", { text: "Total" }), h("span", { class: "itotal mono", text: money(total) })),
       h("dl", { class: "pvmeta" }, meta.flatMap(([k, v]) => [h("dt", { text: k }), h("dd", { text: v })])), ...(S.editing ? [] : viewExtras(o)));
   }
   function readForm() { const f = $("dBody").querySelector("[data-form]"); if (!f) return null; const o = {}; for (const [k] of EDIT_FIELDS) { const el = f.querySelector(`[name="${k}"]`); if (el) o[k] = el.value; } return o; }
@@ -1371,7 +1419,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       const ta = (k) => { const t = h("textarea", { id: "d_" + k, name: k }); t.value = val(k); return t; };
       const people = activeIds().sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
       if (o.assignee && !people.includes(o.assignee)) people.push(o.assignee);
-      if (S.items != null) { detailEd = itemsEditor(o.id, S.items); itemsBox.append(detailEd.el, h("div", { class: "itotalrow" }, h("span", { text: "Total" }), detailEd.totalEl)); }
+      if (S.items != null) { detailEd = itemsEditor(o.id, S.items, livePreview); itemsBox.append(detailEd.el, h("div", { class: "itotalrow" }, h("span", { text: "Total" }), detailEd.totalEl)); }
+      body.addEventListener("input", livePreview); body.addEventListener("change", livePreview);
       body.append(h("div", { class: "grid2", "data-form": true },
         field("name", "Name", inp("name", { maxlength: "200" }), true),
         field("company", "Company", h("select", { id: "d_company", name: "company" }, val("company") ? null : h("option", { value: "", selected: true, text: "Not set" }), COMPANIES.map((c) => h("option", { value: c, selected: val("company") === c, text: c })))),
@@ -1616,16 +1665,16 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     const name = $("aName").value.trim(), address = $("aAddress").value.trim(), errEl = $("aErr"); errEl.textContent = "";
     if (!name) { errEl.textContent = "Enter a name."; $("aName").focus(); return; }
     const company = $("aCompany").value; if (!COMPANIES.includes(company)) { errEl.textContent = "Choose which company this order is from."; $("aCompany").focus(); return; }
-    const pay = $("aPay").value; if (!PAYMENTS.includes(pay)) { errEl.textContent = "Choose a payment status."; $("aPay").focus(); return; }
+    const pay = PAYMENTS.includes($("aPay").value) ? $("aPay").value : "Unpaid";
     const m = addEd.validate(); if (m) { errEl.textContent = m; return; }
     const extra = { invoice: $("aInvoice").value.trim().slice(0, 100), jo: $("aJo").value.trim().slice(0, 100), remarks: $("aRemarks").value.trim().slice(0, 1000) };
     const btn = $("aSave"); btn.disabled = true; btn.textContent = "Adding…";
     const { data, error } = await sb.rpc("create_order", { p_id: addId, p_name: name.slice(0, 200), p_address: address.slice(0, 1000),
-      p_status: S.view.startsWith("st:") ? S.view.slice(3) : "Pending", p_assignee: S.view === "mine" ? S.user.id : null, p_items: addEd.value(), p_payment: pay });
+      p_status: S.view.startsWith("st:") ? S.view.slice(3) : "Pending", p_assignee: S.view === "mine" ? S.user.id : null, p_items: addEd.value(), p_payment: pay === "Unpaid" ? "Partial Payment" : pay });
     btn.disabled = false; btn.textContent = "Add order";
     if (error) { errEl.textContent = dbMsg(error); return; }
     const newId = addId, sizes = addEd.sizes(), flags = addEd.flags(); addEd = null; closeWin($("addWin")); toast(`Added ${data}`);
-    const patch = { company };
+    const patch = { company }; if (pay === "Unpaid") patch.payment_status = "Unpaid";
     if (extra.invoice) patch.invoice_no = extra.invoice; if (extra.jo) patch.job_order_no = extra.jo; if (extra.remarks) patch.remarks = extra.remarks;
     try { await updateOrder(newId, patch); } catch (e2) { toast(`Added ${data}, but the company, invoice/JO no. or remarks didn't save. Open the order and set them again.`); }
     if (sizes.some(Boolean) || flags.some((f) => f.on)) { try { await saveSizes(newId, sizes, flags); } catch (e3) { toast(`Added ${data}, but the item sizes didn't save. Open the order and set them again.`); } }
