@@ -168,7 +168,11 @@
   body.embed header.top,body.embed .editor,body.embed .toast{display:none!important}
   body.embed main{display:block;padding:0}
   body.embed .paperWrap{overflow:visible}
-  body.embed #paper{box-shadow:none;margin:0;width:210mm;zoom:var(--fit,1)}
+  body.embed #paper{box-shadow:none;margin:0 auto;width:210mm;min-height:0;zoom:var(--fit,1)}
+  @media screen{ body.embed.crop .iv-rule, body.embed.crop .iv-rule ~ *{display:none!important} body.embed.crop .iv{padding-bottom:8mm} }
+  body.framed #backOrders, body.framed #btnNew, body.framed #btnRecords, body.framed #typeSeg, body.framed header.top h1{display:none!important}
+  body.framed .paperWrap{display:none}
+  body.framed main{display:block;max-width:680px;margin:0 auto}
   @media print{
     @page{size:A4;margin:0}
     body{background:#fff}
@@ -723,9 +727,12 @@
     if(inv.savedAt && inv.orderId && !dirty && (wasNew || fromOrder)) backToOrder('INV');
   };
   let fromOrder = false;
-  function backToOrder(doc){
-    const id = (mode==='JO' ? records.find(r => r.id===joInvoiceId)?.orderId : inv.orderId) || '';
+  function goOrder(id, doc){
+    if(FRAMED && id){ window.parent.postMessage({mrph:'saved', orderId:id, doc:doc||'INV'}, location.origin); return; }
     location.href = id ? `./?order=${encodeURIComponent(id)}${doc ? '&doc=' + doc : ''}` : './';
+  }
+  function backToOrder(doc){
+    goOrder((mode==='JO' ? records.find(r => r.id===joInvoiceId)?.orderId : inv.orderId) || '', doc);
   }
   $('#backOrders').onclick = e => {
     const id = mode==='JO' ? records.find(r => r.id===joInvoiceId)?.orderId : inv.orderId;
@@ -744,7 +751,7 @@
     const jo = buildJO(i); records.unshift(jo); await saveRecords(); noteNumber('JO', null, jo.number);
     await linkOrder(i.orderId, {job_order_no: jo.number});
     renderJoInvoiceSelect(); refresh(); toast(`Job order ${jo.number} created`);
-    if(i.orderId) setTimeout(() => { location.href = `./?order=${encodeURIComponent(i.orderId)}&doc=JO`; }, 350);
+    if(i.orderId) setTimeout(() => goOrder(i.orderId, 'JO'), FRAMED ? 0 : 350);
   };
 
   // ---------- print ----------
@@ -895,16 +902,27 @@
   }
   renderCompanySelects();
   const P = new URLSearchParams(location.search);
+  const FRAMED = !!P.get('frame') && window.parent !== window;
   if(P.get('embed')){
     document.body.classList.add('embed');
-    const fit = () => document.documentElement.style.setProperty('--fit', String(Math.min(1.4, (window.innerWidth || 794) / 794)));
-    fit(); window.addEventListener('resize', fit);
+    if(P.get('doc')!=='JO') document.body.classList.add('crop');
+    const root = document.documentElement.style;
+    const fit = () => {
+      const wFit = (window.innerWidth || 794) / 794;
+      if(!document.body.classList.contains('crop')){ root.setProperty('--fit', String(Math.min(1.4, wFit))); return; }
+      root.setProperty('--fit', '1');
+      const hNat = $('#paper').getBoundingClientRect().height || 1123;
+      root.setProperty('--fit', String(Math.min(1.4, wFit, (window.innerHeight || 600) / hNat)));
+    };
+    window.addEventListener('resize', fit);
     const showDoc = () => {
       const i = records.find(r => r.type==='INV' && r.id===P.get('id'));
       const d = !i ? null : P.get('doc')==='JO' ? joFor(i.id) : i;
       if(!d){ $('#paper').innerHTML = '<p class="muted" style="text-align:center;padding:60px 20px;font-size:22px">Not found on this device.</p>'; return; }
       document.title = `${d.number} - ${d.custName || 'client'}`;
-      renderPaper(d);
+      renderPaper(d); fit();
+      $$('#paper img').forEach(im => { if(!im.complete) im.addEventListener('load', fit, {once:true}); });
+      if(document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
     };
     showDoc();
     window.addEventListener('message', async e => {
@@ -915,6 +933,7 @@
     window.parent && window.parent.postMessage({mrphDoc:'ready'}, location.origin);
     return;
   }
+  if(FRAMED) document.body.classList.add('framed');
   inv = blankInvoice(companies[0].id);
   fillForm(); setMode('INV');
   const ho = await DB.get('handoff');
@@ -924,7 +943,7 @@
     fromOrder = true;
     if(found){
       if(!found.orderId){ found.orderId = str(ho.orderId,64); found.orderNo = str(ho.orderNo,40); await saveRecords(); }
-      if(ho.want==='JO-create'){ joInvoiceId = found.id; setMode('JO'); if(!joFor(found.id)) $('#btnCreateJO').click(); else location.replace(`./?order=${encodeURIComponent(found.orderId)}&doc=JO`); }
+      if(ho.want==='JO-create'){ joInvoiceId = found.id; setMode('JO'); if(!joFor(found.id)) $('#btnCreateJO').click(); else goOrder(found.orderId, 'JO'); }
       else if(ho.want==='JO'){ joInvoiceId = found.id; setMode('JO'); }
       else { inv = clone(found); dirty = false; fillForm(); }
     } else {

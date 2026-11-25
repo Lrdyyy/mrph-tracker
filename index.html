@@ -235,15 +235,25 @@ select.pill option { background: var(--bg); color: var(--ink); }
 .win.view .split > .pane:first-child { display: none; }
 .win.view .split > .pane + .pane { border-left: 0; }
 .win.view .preview { max-height: 66%; }
-@media (min-width: 761px) { #docWin { width: min(860px, calc(100vw - 24px)); height: min(900px, calc(100% - 24px)); } }
+@media (min-width: 761px) { #docWin, #editWin { width: min(860px, calc(100vw - 24px)); height: min(900px, calc(100% - 24px)); } }
 .doctabs { display: flex; gap: 6px; padding: 8px 18px; border-bottom: 1px solid var(--line); }
-.docbody { flex: 1; min-height: 0; overflow: auto; background: #e9ebef; padding: 14px; }
-.docbody iframe { display: block; width: 100%; border: 0; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.14); border-radius: 4px; }
+.docbody { flex: 1; min-height: 0; display: flex; background: #e9ebef; padding: 14px; }
+.docbody iframe { display: block; flex: 1; width: 100%; height: 100%; border: 0; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.14); border-radius: 4px; }
 .docempty { display: grid; justify-items: center; gap: 12px; padding: 60px 16px; text-align: center; color: #3b4048; }
 @media (max-width: 760px) { .docbody { padding: 8px; } }
 .win.xl:not(.view) .ptabs, .win.xl:not(.view) .tpane { display: none !important; }
 .win.xl:not(.view) .preview { max-height: none; flex: 1 1 auto; border-bottom: 0; }
-@media (min-width: 761px) { .win.xl.view { width: min(680px, calc(100vw - 24px)); } }
+@media (min-width: 761px) {
+  .win.xl.view { width: min(1100px, calc(100vw - 24px)); height: min(820px, calc(100% - 24px)); }
+  .win.xl.view .split > .pane + .pane { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(300px, 1fr); grid-template-rows: auto minmax(0, 1fr); background: var(--bg); }
+  .win.xl.view .panehead { display: none; }
+  .win.xl.view .preview { grid-column: 1; grid-row: 1 / span 2; max-height: none; height: 100%; border-bottom: 0; border-right: 1px solid var(--line); padding: 18px 20px; }
+  .win.xl.view .ptabs { grid-column: 2; grid-row: 1; }
+  .win.xl.view .tpane { grid-column: 2; grid-row: 2; min-height: 0; }
+  .win.xl.view .pvhero { height: 280px; }
+}
+#viewFoot { gap: 12px; }
+#viewFoot .right { gap: 10px; }
 .preview { flex: 0 1 auto; max-height: 62%; overflow-y: auto; padding: 14px 16px; display: grid; gap: 12px; align-content: start; background: var(--bg); border-bottom: 1px solid var(--line); }
 .pvgallery { display: grid; gap: 8px; }
 .pvthumbs { display: flex; gap: 6px; overflow-x: auto; }
@@ -345,6 +355,8 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 @media (prefers-reduced-motion: no-preference) {
   .win { animation: winIn .22s cubic-bezier(.2, .9, .3, 1.15) both; }
   .win.closing { animation: winOut .15s ease-in both; pointer-events: none; }
+  #docWin { animation: sheetIn .34s cubic-bezier(.2, .85, .25, 1) both; }
+  #docWin.closing { animation: sheetOut .15s ease-in both; }
   .scrim { animation: fadeIn .2s ease-out both; }
   .scrim.closing { animation: fadeOut .15s ease-in both; }
   .lightbox:not([hidden]) { animation: fadeIn .18s ease-out both; }
@@ -352,6 +364,8 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
   .toast:not([hidden]) { animation: toastIn .22s cubic-bezier(.2, .9, .3, 1.2) both; }
   @keyframes winIn { from { opacity: 0; scale: .92; translate: 0 12px; } to { opacity: 1; scale: 1; translate: 0 0; } }
   @keyframes winOut { from { opacity: 1; scale: 1; } to { opacity: 0; scale: .95; translate: 0 6px; } }
+  @keyframes sheetIn { from { translate: 0 100vh; } to { translate: 0 0; } }
+  @keyframes sheetOut { from { translate: 0 0; opacity: 1; } to { translate: 0 40vh; opacity: 0; } }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
   @keyframes toastIn { from { opacity: 0; translate: 0 14px; } to { opacity: 1; translate: 0 0; } }
@@ -605,6 +619,13 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
   </div>
   <div class="docbody" id="docBody"></div>
   <div class="win-foot" id="docFoot"></div>
+</section>
+<section class="win xl" id="editWin" role="dialog" aria-modal="true" aria-labelledby="editTitle" hidden>
+  <div class="win-head" data-drag>
+    <div><span class="kicker" id="editKicker"></span><h2 id="editTitle">Invoice</h2></div>
+    <button class="x" type="button" data-close aria-label="Close">×</button>
+  </div>
+  <div class="docbody" id="editBody" style="padding:0;background:#f3f4f6"></div>
 </section>
 <div class="lightbox" id="lightbox" hidden role="dialog" aria-label="Photo"><img alt="Item photo"><span class="lbclose">Tap anywhere to close</span></div>
 
@@ -1104,7 +1125,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   }
   function showAnimated(el) { clearTimeout(el._closeT); el.classList.remove("closing"); el.hidden = false; }
   function openWin(win) { win.style.left = ""; win.style.top = ""; win.style.transform = ""; showAnimated(win); showAnimated($("scrim")); if (!stack.includes(win)) stack.push(win); }
-  function closeWin(win) { hideAnimated(win); const i = stack.indexOf(win); if (i >= 0) stack.splice(i, 1); if (!stack.length) hideAnimated($("scrim")); if (win.id === "detailWin") { S.openId = null; S.editing = false; stopThread(); discardDetailUploads(); } if (win.id === "addWin") discardAddUploads(); }
+  function closeWin(win) { hideAnimated(win); const i = stack.indexOf(win); if (i >= 0) stack.splice(i, 1); if (!stack.length) hideAnimated($("scrim")); if (win.id === "detailWin") { S.openId = null; S.editing = false; stopThread(); discardDetailUploads(); } if (win.id === "addWin") discardAddUploads(); if (win.id === "editWin") { editFrame = null; setTimeout(() => { if ($("editWin").hidden) $("editBody").replaceChildren(); }, 250); } if (win.id === "docWin") docState = null; }
   function closeAllWins() { [...stack].forEach(closeWin); }
   document.addEventListener("click", (e) => { const c = e.target.closest("[data-close]"); if (c) closeWin(c.closest(".win")); });
   $("scrim").addEventListener("click", () => { const t = stack[stack.length - 1]; if (t) closeWin(t); });
@@ -1312,15 +1333,37 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     } catch (e) { return ""; }
   }
   async function toBilling(o, want, btn) {
-    if (btn) { btn.disabled = true; btn.textContent = "Opening…"; }
+    const btnText = btn ? btn.textContent : ""; if (btn) { btn.disabled = true; btn.textContent = "Opening…"; }
     let items = S.openId === o.id ? S.items : null;
     if (!items) { const { data } = await sb.from("order_items").select("*").eq("order_id", o.id).order("position"); items = data || []; }
     const contact = ((o.remarks || "").match(/contact(?: (?:no\.?|number))?\s*[:：]\s*([^;\n]+)/i) || [])[1] || "";
     const out = [];
     for (const r of items) out.push({ name: r.description || "", dims: r.size || "", details: r.backlights ? blText(r) : "", qty: Number(r.qty || 1), price: r.unit_price == null ? 0 : Number(r.unit_price), photo: r.photos && r.photos[0] ? await photoData(r.photos[0]) : "" });
     await BillDB.set("handoff", { at: Date.now(), want, orderId: o.id, orderNo: o.orderNo || "", name: o.name || "", company: o.company || "", address: o.address || "", contact: contact.trim(), invoiceNo: o.invoiceNo || "", jobOrderNo: o.jobOrderNo || "", items: out });
-    location.href = "billing.html";
+    if (btn) { btn.disabled = false; btn.textContent = btnText; }
+    openEditor(o, want);
   }
+  let editFrame = null;
+  function openEditor(o, want) {
+    if (editFrame && editFrame.hidden) editFrame.fr.remove();
+    const fr = h("iframe", { src: "billing.html?frame=1", title: "Invoice editor" });
+    if (want === "JO-create") {
+      fr.style.cssText = "position:fixed;left:-9999px;top:0;width:1200px;height:900px;opacity:0;pointer-events:none";
+      document.body.append(fr); editFrame = { fr, o, hidden: true }; toast("Creating job order…"); return;
+    }
+    $("editKicker").textContent = `${o.orderNo || ""} · ${o.name || ""}`;
+    $("editTitle").textContent = o.invoiceNo ? `Edit invoice ${o.invoiceNo}` : "New invoice";
+    $("editBody").replaceChildren(fr); editFrame = { fr, o, hidden: false }; openWin($("editWin"));
+  }
+  window.addEventListener("message", async (e) => {
+    if (e.origin !== location.origin || !e.data || e.data.mrph !== "saved") return;
+    const ef = editFrame; editFrame = null;
+    if (ef && ef.hidden) ef.fr.remove(); else if (!$("editWin").hidden) closeWin($("editWin"));
+    await applyBillingLinks();
+    const o = S.orders.find((x) => x.id === e.data.orderId) || (ef && ef.o); if (!o) return;
+    docState = { o, doc: e.data.doc === "JO" ? "JO" : "INV" }; await paintDoc();
+    if ($("docWin").hidden) openWin($("docWin"));
+  });
   async function billingRecords() { const r = await BillDB.get("records"); return Array.isArray(r) ? r : []; }
   async function findDocs(o) {
     const recs = await billingRecords();
@@ -1331,7 +1374,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   let docState = null;
   async function openDoc(o, doc, btn) {
     const { inv } = await findDocs(o);
-    if (!inv) { toBilling(o, doc === "JO" ? "JO" : "INV", btn); return; }
+    if (!inv) { if (doc === "JO") toast("Create the invoice first. The job order is made from it."); toBilling(o, "INV", btn); return; }
     docState = { o, doc }; await paintDoc(); openWin($("docWin"));
   }
   async function paintDoc() {
@@ -1351,16 +1394,13 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       return;
     }
     const fr = h("iframe", { title: show.number, src: `billing.html?embed=1&id=${encodeURIComponent(inv.id)}&doc=${doc}` });
-    const fit = () => { try { const d = fr.contentDocument; if (d && d.body) fr.style.height = Math.max(400, d.documentElement.scrollHeight) + "px"; } catch (e) {} };
-    fr.addEventListener("load", () => { fit(); setTimeout(fit, 300); setTimeout(fit, 1200); });
-    body.replaceChildren(fr); body.scrollTop = 0;
+    body.replaceChildren(fr);
     foot.replaceChildren(h("div", { class: "right", style: "margin-left:0;margin-right:auto" }, editBtn),
       h("div", { class: "right" }, h("button", { class: "btn", type: "button", text: "Close", "data-close": true }),
         h("button", { class: "btn go", type: "button", text: "Print / Save PDF", onclick: () => { try { fr.contentWindow.postMessage("print", location.origin); } catch (e) {} } })));
   }
   $("docTabInv").addEventListener("click", () => { if (docState) { docState.doc = "INV"; paintDoc(); } });
   $("docTabJo").addEventListener("click", () => { if (docState) { docState.doc = "JO"; paintDoc(); } });
-  window.addEventListener("resize", () => { const fr = $("docBody").querySelector("iframe"); if (fr && fr.contentDocument) setTimeout(() => { try { fr.style.height = Math.max(400, fr.contentDocument.documentElement.scrollHeight) + "px"; } catch (e) {} }, 150); });
   let pendingOpen = (() => { const p = new URLSearchParams(location.search); return p.get("order") ? { id: p.get("order"), doc: p.get("doc") } : null; })();
   if (pendingOpen) history.replaceState(null, "", location.pathname);
   function openPending() {
@@ -1452,7 +1492,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
           h("div", null, h("b", { text: r.description || "Untitled item" }), h("span", { class: "d", text: bits })), h("span", { class: "amt mono", text: money(l) }));
       }));
     const total = any ? Math.round(t * 100) / 100 : o.amount;
-    const meta = [["Company", o.company || "—"], ["Assignee", o.assignee ? nameOf(o.assignee) : "Unassigned"], ["Invoice No.", o.invoiceNo || "—"], ["Job Order No.", o.jobOrderNo || "—"], ["Address", o.address], ["Remarks", o.remarks]].filter(([, v]) => v);
+    const contact = ((o.remarks || "").match(/contact(?: (?:no\.?|number))?\s*[:：]\s*([^;\n]+)/i) || [])[1];
+    const meta = [["Status", o.status], ["Payment", o.paymentStatus], ["Company", o.company || "—"], ["Contact", contact && contact.trim()], ["Assignee", o.assignee ? nameOf(o.assignee) : "Unassigned"], ["Invoice No.", o.invoiceNo || "—"], ["Job Order No.", o.jobOrderNo || "—"], ["Address", o.address], ["Remarks", o.remarks]].filter(([, v]) => v);
     box.replaceChildren(hero, head, tags, list, h("div", { class: "pvtotal" }, h("span", { text: "Total" }), h("span", { class: "itotal mono", text: money(total) })),
       h("dl", { class: "pvmeta" }, meta.flatMap(([k, v]) => [h("dt", { text: k }), h("dd", { text: v })])), ...(S.editing ? [] : viewExtras(o)));
   }
