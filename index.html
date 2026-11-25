@@ -1391,12 +1391,23 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   let docState = null;
   async function openDoc(o, doc, btn) {
     const { inv } = await findDocs(o);
-    if (!inv) { if (doc === "JO") toast("Create the invoice first. The job order is made from it."); toBilling(o, "INV", btn); return; }
+    if (!inv && !o.invoiceNo) { if (doc === "JO") toast("Create the invoice first. The job order is made from it."); toBilling(o, "INV", btn); return; }
     docState = { o, doc }; await paintDoc(); openWin($("docWin"));
   }
   async function paintDoc() {
     if (!docState) return;
     const { o, doc } = docState; const { inv, jo } = await findDocs(o);
+    if (!inv) {
+      $("docKicker").textContent = `${o.orderNo || ""} · ${o.name || ""}`; $("docTitle").textContent = o.invoiceNo || "Invoice";
+      $("docTabInv").textContent = o.invoiceNo ? `Invoice ${o.invoiceNo}` : "Invoice"; $("docTabJo").textContent = o.jobOrderNo ? `Job order ${o.jobOrderNo}` : "Job order";
+      $("docTabInv").setAttribute("aria-pressed", doc === "INV"); $("docTabJo").setAttribute("aria-pressed", doc === "JO");
+      $("docBody").replaceChildren(h("div", { class: "docempty" }, h("b", { text: `${o.invoiceNo} hasn't reached this device yet` }),
+        h("span", { text: "It was made on another phone or computer. It shows here once that device opens the app with internet." }),
+        h("button", { class: "btn go", type: "button", text: "Check again", onclick: async (e) => { e.currentTarget.disabled = true; e.currentTarget.textContent = "Checking…"; await paintDoc(); } })));
+      $("docFoot").replaceChildren(h("div", { class: "right", style: "margin-left:0;margin-right:auto" }, h("button", { class: "btn", type: "button", text: "Make a new invoice here", onclick: (e) => toBilling(o, "INV", e.currentTarget) })),
+        h("div", { class: "right" }, h("button", { class: "btn", type: "button", "data-close": true, text: "Close" })));
+      return;
+    }
     $("docKicker").textContent = `${o.orderNo || ""} · ${o.name || ""}`;
     $("docTabInv").setAttribute("aria-pressed", doc === "INV"); $("docTabJo").setAttribute("aria-pressed", doc === "JO");
     $("docTabInv").textContent = inv ? `Invoice ${inv.number}` : "Invoice"; $("docTabJo").textContent = jo ? `Job order ${jo.number}` : "Job order";
