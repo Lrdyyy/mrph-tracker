@@ -524,7 +524,6 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
             <tbody id="rows"></tbody>
           </table>
           <div class="empty" id="empty" hidden></div>
-          <button class="addrow" type="button" id="addRow" hidden>+ Add order</button>
         </div>
       </div>
       <div class="board" id="boardView" hidden></div>
@@ -1091,7 +1090,6 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
           h("span", { text: S.q.trim() ? "Clear the search or pick another view." : S.view === "mine" ? "Orders an Editor assigns to you show up here." : can.add() ? "Use Add order at the bottom right to log one." : "Orders appear here as soon as an Editor adds them." }));
         empty.hidden = false;
       } else empty.hidden = true;
-      $("addRow").hidden = !(S.loaded && can.add());
     } else paintBoard(list);
     $("fab").hidden = !(S.loaded && can.add() && !isUpd);
     $("importBtn").hidden = !(S.loaded && can.add() && !isUpd);
@@ -1795,7 +1793,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     openWin($("addWin")); setTimeout(() => $("aName").focus(), 30);
   }
   function discardAddUploads() { if (addEd) removePhotos(addEd.newUploads()); addEd = null; }
-  $("fab").addEventListener("click", openAdd); $("addRow").addEventListener("click", openAdd);
+  $("fab").addEventListener("click", openAdd);
   $("addForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = $("aName").value.trim(), address = $("aAddress").value.trim(), errEl = $("aErr"); errEl.textContent = "";
