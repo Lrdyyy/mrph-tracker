@@ -116,8 +116,9 @@
   .iv-rule{border:0;border-top:2px solid #333;margin:28px 0 14px}
   .iv-pay{white-space:pre-line;margin:0}
   .iv-acct{white-space:pre-line;margin:6px 0 0;font-weight:700}
-  .iv-th{text-align:center;font-weight:700;margin:22px 0 14px;font-size:11.5px}
-  .iv-terms{text-align:center;white-space:pre-line}
+  .iv-th{text-align:left;font-weight:700;margin:22px 0 10px;font-size:11.5px}
+  .iv-terms{text-align:left;white-space:pre-line}
+  .iv-terms > div{margin-bottom:3px}
   .iv-terms .l{text-align:left}
   .iv-foot{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:30px}
   .iv-foot .logo{width:150px;height:150px;object-fit:contain}
@@ -164,12 +165,11 @@
   .toast.show{opacity:1}
   .muted{color:var(--muted)}
 
-  body.embed{background:#fff}
+  html:has(body.embed),body.embed{background:transparent;overflow:hidden}
   body.embed header.top,body.embed .editor,body.embed .toast{display:none!important}
   body.embed main{display:block;padding:0}
   body.embed .paperWrap{overflow:visible}
   body.embed #paper{box-shadow:none;margin:0 auto;width:210mm;min-height:0;zoom:var(--fit,1)}
-  @media screen{ body.embed.crop .iv-rule, body.embed.crop .iv-rule ~ *{display:none!important} body.embed.crop .iv{padding-bottom:8mm} }
   body.framed #backOrders, body.framed #btnNew, body.framed #btnRecords, body.framed #typeSeg, body.framed header.top h1{display:none!important}
   body.framed .paperWrap{display:none}
   body.framed main{display:block;max-width:680px;margin:0 auto}
@@ -319,6 +319,8 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 (async () => {
   // ---------- helpers ----------
@@ -428,7 +430,7 @@
   // Counters: the last number used per series & year, e.g. {INV:{2026:190}, JO:{2026:128}}
   let seq = (await DB.get('seq')) || LS.get('iom_seq', {});
   if(!seq.INV){ seq = {INV: Object.assign({}, seq), JO:{}}; }   // migrate older format
-  const saveSeq = () => { DB.set('seq', seq); LS.set('iom_seq', seq); };
+  const saveSeq = () => { DB.set('seq', seq); LS.set('iom_seq', seq); pushKv('seq'); };
   const parseNo = (prefix, n) => { const m = String(n||'').trim().match(new RegExp('^' + prefix + '-(\\d{4})-(\\d+)$', 'i')); return m ? {y:m[1], n:+m[2]} : null; };
   // Record a saved number so the next one always continues from it.
   // If the latest number is corrected (e.g. typo 1900 -> 0190), the counter follows the correction.
@@ -443,7 +445,7 @@
     records.filter(r => r.type===prefix).forEach(r => { const p = parseNo(prefix, r.number); if(p && p.y===year) max = Math.max(max, p.n); });
     return `${prefix}-${year}-${String(max+1).padStart(4,'0')}`;
   }
-  const saveCompanies = () => DB.set('companies', companies);
+  const saveCompanies = async () => { const ok = await DB.set('companies', companies); pushKv('companies'); return ok; };
   async function linkOrder(orderId, patch){
     if(!orderId) return;
     const q = (await DB.get('links')) || [];
@@ -451,7 +453,80 @@
     if(cur) Object.assign(cur.patch, patch); else q.push({orderId, patch});
     await DB.set('links', q);
   }
-  const saveRecords = () => DB.set('records', records);
+  const saveRecords = async () => { const ok = await DB.set('records', records); await syncPush(); return ok; };
+
+  // ---------- shared storage (Supabase): same invoices on every device ----------
+  const CFG = window.MRPH_CONFIG || {};
+  let cloud = null, cloudOn = false, canWrite = false;
+  try{ if(window.supabase && CFG.SUPABASE_URL) cloud = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:false}}); }catch(e){ cloud = null; }
+  const pushed = new Map();
+  const withTimeout = (p, ms) => Promise.race([p, new Promise(res => setTimeout(() => res({error:{message:'timeout'}}), ms))]);
+  async function cloudInit(){
+    if(!cloud) return;
+    try{
+      const { data } = await withTimeout(cloud.auth.getSession(), 6000); if(!data || !data.session) return;
+      const r = await withTimeout(cloud.rpc('my_role'), 6000);
+      cloudOn = ['viewer','editor','admin'].includes(r.data); canWrite = ['editor','admin'].includes(r.data);
+    }catch(e){ cloudOn = false; }
+  }
+  function mergeRemote(rows){
+    let changed = false;
+    for(const x of rows || []){
+      const r = cleanRecord(x.data); if(!r) continue;
+      if(!r.savedAt) r.savedAt = x.updated_at;
+      pushed.set(r.id, JSON.stringify(r));
+      const i = records.findIndex(y => y.id===r.id);
+      if(i < 0){ records.push(r); changed = true; }
+      else if(String(records[i].savedAt||'') < String(r.savedAt||'')){ records[i] = r; changed = true; }
+    }
+    if(changed) DB.set('records', records);
+    return changed;
+  }
+  const COLS = 'id,type,number,order_id,invoice_id,data,updated_at';
+  async function pullAll(){
+    if(!cloudOn) return false;
+    const { data, error } = await withTimeout(cloud.from('billing_records').select(COLS).limit(5000), 15000);
+    if(error) return false;
+    const ch = mergeRemote(data);
+    const kv = await withTimeout(cloud.from('billing_kv').select('key,value'), 8000);
+    for(const row of kv.data || []){
+      if(row.key==='companies' && Array.isArray(row.value)){ const cos = row.value.map(cleanCompany).filter(Boolean); if(cos.length){ companies = cos; DB.set('companies', companies); } }
+      if(row.key==='seq' && row.value && typeof row.value==='object'){ for(const t of ['INV','JO']) for(const y in (row.value[t]||{})) seq[t][y] = Math.max(Number(seq[t][y])||0, Number(row.value[t][y])||0); DB.set('seq', seq); }
+    }
+    return ch;
+  }
+  async function pullFor(invId){
+    if(!cloudOn || !/^[A-Za-z0-9_-]{1,64}$/.test(invId||'')) return false;
+    const { data, error } = await withTimeout(cloud.from('billing_records').select(COLS).or(`id.eq.${invId},invoice_id.eq.${invId}`), 10000);
+    return error ? false : mergeRemote(data);
+  }
+  let pushing = null;
+  async function syncPush(){
+    if(!cloudOn || !canWrite) return;
+    if(pushing) await pushing;
+    pushing = (async () => {
+      const ups = records.filter(r => pushed.get(r.id) !== JSON.stringify(r));
+      const dels = [...pushed.keys()].filter(id => !records.some(r => r.id===id));
+      for(let k = 0; k < ups.length; k += 20){
+        const batch = ups.slice(k, k+20);
+        const { error } = await withTimeout(cloud.from('billing_records').upsert(batch.map(r => ({ id:r.id, type:r.type, number:r.number||'', order_id:r.orderId||null, invoice_id:r.invoiceId||null, data:r, updated_at:r.savedAt || new Date().toISOString() }))), 20000);
+        if(error){ toast("Saved on this device. Couldn't sync to the team yet."); return; }
+        batch.forEach(r => pushed.set(r.id, JSON.stringify(r)));
+      }
+      if(dels.length){ const { error } = await withTimeout(cloud.from('billing_records').delete().in('id', dels), 15000); if(!error) dels.forEach(id => pushed.delete(id)); }
+    })();
+    try{ await pushing; } finally { pushing = null; }
+  }
+  const kvTimers = {};
+  function pushKv(key){
+    if(!cloudOn || !canWrite) return;
+    clearTimeout(kvTimers[key]);
+    kvTimers[key] = setTimeout(async () => {
+      let value = key==='companies' ? companies : seq;
+      if(key==='seq'){ const cur = await cloud.from('billing_kv').select('value').eq('key','seq').maybeSingle(); const rv = cur.data && cur.data.value; if(rv) for(const t of ['INV','JO']) for(const y in (rv[t]||{})) seq[t][y] = Math.max(Number(seq[t][y])||0, Number(rv[t][y])||0); value = seq; }
+      await cloud.from('billing_kv').upsert({ key, value, updated_at: new Date().toISOString() });
+    }, key==='companies' ? 900 : 50);
+  }
 
   let mode = 'INV', inv, joInvoiceId = '', dirty = false, photoTarget = -1;
   const companyOf = id => companies.find(c => c.id===id) || companies[0];
@@ -895,7 +970,11 @@
   window.addEventListener('beforeunload', e => { if(dirty){ e.preventDefault(); e.returnValue=''; } });
 
   // ---------- init ----------
-  saveCompanies(); if(records.length) saveRecords();
+  await cloudInit();
+  const P0 = new URLSearchParams(location.search);
+  if(P0.get('embed')) await pullFor(P0.get('id'));
+  else { await pullAll(); if(canWrite){ const any = (await cloud.from('billing_kv').select('key').eq('key','companies').maybeSingle()).data; if(!any) pushKv('companies'); pushKv('seq'); } }
+  DB.set('companies', companies); if(records.length){ DB.set('records', records); if(P0.get('sync')) await syncPush(); else if(!P0.get('embed')) syncPush(); }
   try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}   // ask the phone not to auto-clear data
   if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     try{ navigator.serviceWorker.register('sw.js').catch(() => {}); }catch(e){}
@@ -903,16 +982,14 @@
   renderCompanySelects();
   const P = new URLSearchParams(location.search);
   const FRAMED = !!P.get('frame') && window.parent !== window;
+  if(P.get('sync')){ if(pushing) await pushing; window.parent !== window && window.parent.postMessage({mrph:'synced', ok: cloudOn && canWrite}, location.origin); return; }
   if(P.get('embed')){
     document.body.classList.add('embed');
-    if(P.get('doc')!=='JO') document.body.classList.add('crop');
     const root = document.documentElement.style;
     const fit = () => {
-      const wFit = (window.innerWidth || 794) / 794;
-      if(!document.body.classList.contains('crop')){ root.setProperty('--fit', String(Math.min(1.4, wFit))); return; }
-      root.setProperty('--fit', '1');
-      const hNat = $('#paper').getBoundingClientRect().height || 1123;
-      root.setProperty('--fit', String(Math.min(1.4, wFit, (window.innerHeight || 600) / hNat)));
+      root.setProperty('--fit', String(Math.min(1.4, (window.innerWidth || 794) / 794)));
+      const h = Math.ceil($('#paper').getBoundingClientRect().height);
+      if(window.parent !== window) window.parent.postMessage({mrphDoc:'size', h}, location.origin);
     };
     window.addEventListener('resize', fit);
     const showDoc = () => {

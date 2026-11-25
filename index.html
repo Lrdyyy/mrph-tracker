@@ -221,7 +221,7 @@ select.pill option { background: var(--bg); color: var(--ink); }
 .split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
 .split > .pane { min-height: 0; display: flex; flex-direction: column; }
 .split > .pane + .pane { border-left: 1px solid var(--line); background: var(--panel); }
-@media (max-width: 760px) {
+@media all {
   .win, .win.lg, .win.xl { left: 0; right: 0; top: auto; bottom: 0; transform: none; width: 100%; max-width: 100%; max-height: 92vh; max-height: 92dvh; border-radius: 14px 14px 0 0; border-left: 0; border-right: 0; border-bottom: 0; }
   .win.xl { top: 0; height: 100vh; height: 100dvh; max-height: none; border-radius: 0; border-top: 0; }
   .win-head { cursor: default; touch-action: auto; }
@@ -231,27 +231,22 @@ select.pill option { background: var(--bg); color: var(--ink); }
   .split > .pane + .pane { border-left: 0; border-top: 1px solid var(--line); }
   .split .tpane { display: flex; height: 340px; flex: none; }
 }
+@media (min-width: 761px) {
+  .win, .win.lg, .win.xl { left: 50%; right: auto; width: min(640px, 100vw); transform: translateX(-50%); border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+  .win.xl { border-radius: 0; }
+}
 .win.view .split { grid-template-columns: minmax(0, 1fr); }
 .win.view .split > .pane:first-child { display: none; }
 .win.view .split > .pane + .pane { border-left: 0; }
 .win.view .preview { max-height: 66%; }
-@media (min-width: 761px) { #docWin, #editWin { width: min(860px, calc(100vw - 24px)); height: min(900px, calc(100% - 24px)); } }
 .doctabs { display: flex; gap: 6px; padding: 8px 18px; border-bottom: 1px solid var(--line); }
-.docbody { flex: 1; min-height: 0; display: flex; background: #e9ebef; padding: 14px; }
-.docbody iframe { display: block; flex: 1; width: 100%; height: 100%; border: 0; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.14); border-radius: 4px; }
+.docbody { flex: 1; min-height: 0; overflow-y: auto; background: #e9ebef; padding: 14px; }
+#editBody { display: flex; overflow: hidden; }
+.docbody iframe { display: block; flex: 1; width: 100%; height: 100%; min-height: 200px; border: 0; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.14); border-radius: 4px; }
 .docempty { display: grid; justify-items: center; gap: 12px; padding: 60px 16px; text-align: center; color: #3b4048; }
 @media (max-width: 760px) { .docbody { padding: 8px; } }
 .win.xl:not(.view) .ptabs, .win.xl:not(.view) .tpane { display: none !important; }
 .win.xl:not(.view) .preview { max-height: none; flex: 1 1 auto; border-bottom: 0; }
-@media (min-width: 761px) {
-  .win.xl.view { width: min(1100px, calc(100vw - 24px)); height: min(820px, calc(100% - 24px)); }
-  .win.xl.view .split > .pane + .pane { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(300px, 1fr); grid-template-rows: auto minmax(0, 1fr); background: var(--bg); }
-  .win.xl.view .panehead { display: none; }
-  .win.xl.view .preview { grid-column: 1; grid-row: 1 / span 2; max-height: none; height: 100%; border-bottom: 0; border-right: 1px solid var(--line); padding: 18px 20px; }
-  .win.xl.view .ptabs { grid-column: 2; grid-row: 1; }
-  .win.xl.view .tpane { grid-column: 2; grid-row: 2; min-height: 0; }
-  .win.xl.view .pvhero { height: 280px; }
-}
 #viewFoot { gap: 12px; }
 #viewFoot .right { gap: 10px; }
 .preview { flex: 0 1 auto; max-height: 62%; overflow-y: auto; padding: 14px 16px; display: grid; gap: 12px; align-content: start; background: var(--bg); border-bottom: 1px solid var(--line); }
@@ -283,7 +278,7 @@ select.pill option { background: var(--bg); color: var(--ink); }
 .pvitem .d { font-size: 12.5px; color: var(--muted); }
 .pvitem .amt { font-weight: 600; }
 .pvtotal { display: flex; justify-content: space-between; align-items: baseline; padding-top: 8px; border-top: 2px solid var(--line); font-weight: 700; }
-@media (max-width: 760px) {
+@media all {
   .preview { max-height: none; }
   .win.xl:not(.view) .split { display: flex; flex-direction: column; }
   .win.xl:not(.view) .split > .pane { flex: none; }
@@ -899,8 +894,9 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     const { data, error } = await sb.from("orders").select("*").order("created_at", { ascending: false }).limit(2000);
     const note = $("loadNote");
     if (error) { note.textContent = "Couldn't load orders. " + (/fetch|network/i.test(error.message) ? "Check your connection." : "Reload the page."); note.hidden = false; S.loaded = true; paint(); return; }
-    note.hidden = true; S.orders = (data || []).map(norm); S.loaded = true; paint(); applyBillingLinks().then(openPending);
+    note.hidden = true; S.orders = (data || []).map(norm); S.loaded = true; paint(); applyBillingLinks().then(openPending); if (!syncStarted) { syncStarted = true; syncDeviceInvoices(); }
   }
+  let syncStarted = false;
   async function loadPeople() {
     const { data } = await sb.from("profiles").select("id,name,email,role");
     const m = {}; (data || []).forEach((p) => m[p.id] = p); S.people = m; paint();
@@ -1132,7 +1128,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; if (!$("lightbox").hidden) { $("lightbox").hidden = true; return; } if (!$("picker").hidden) { $("picker").hidden = true; return; } if (stack.length) closeWin(stack[stack.length - 1]); });
   document.querySelectorAll("[data-drag]").forEach((head) => {
     head.addEventListener("pointerdown", (e) => {
-      if (e.target.closest("button") || window.innerWidth <= 760) return;
+      return;
       const win = head.closest(".win"); const r = win.getBoundingClientRect();
       win.style.transform = "none"; win.style.left = r.left + "px"; win.style.top = r.top + "px";
       const dx = e.clientX - r.left, dy = e.clientY - r.top; head.setPointerCapture(e.pointerId);
@@ -1355,6 +1351,17 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     $("editTitle").textContent = o.invoiceNo ? `Edit invoice ${o.invoiceNo}` : "New invoice";
     $("editBody").replaceChildren(fr); editFrame = { fr, o, hidden: false }; openWin($("editWin"));
   }
+  window.addEventListener("message", (e) => {
+    if (e.origin !== location.origin || !e.data) return;
+    if (e.data.mrphDoc === "size") { const fr = $("docBody").querySelector("iframe"); if (fr && e.source === fr.contentWindow) fr.style.height = Math.max(200, e.data.h) + "px"; }
+    if (e.data.mrph === "synced") { if (e.data.ok) try { localStorage.setItem("mrph.billingSynced", "1"); } catch (x) {} document.querySelectorAll("iframe[data-sync]").forEach((f) => f.remove()); }
+  });
+  async function syncDeviceInvoices() {
+    try { if (localStorage.getItem("mrph.billingSynced") === "1" || !can.edit()) return; } catch (e) { return; }
+    const recs = await billingRecords(); if (!recs.length) { try { localStorage.setItem("mrph.billingSynced", "1"); } catch (e) {} return; }
+    const fr = h("iframe", { src: "billing.html?sync=1", "data-sync": "1", title: "" }); fr.style.cssText = "position:fixed;left:-9999px;top:0;width:10px;height:10px;opacity:0;pointer-events:none";
+    document.body.append(fr); setTimeout(() => fr.remove(), 60000);
+  }
   window.addEventListener("message", async (e) => {
     if (e.origin !== location.origin || !e.data || e.data.mrph !== "saved") return;
     const ef = editFrame; editFrame = null;
@@ -1366,6 +1373,16 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   });
   async function billingRecords() { const r = await BillDB.get("records"); return Array.isArray(r) ? r : []; }
   async function findDocs(o) {
+    try {
+      let { data, error } = await sb.from("billing_records").select("id,type,number,order_id,invoice_id").eq("order_id", o.id).eq("type", "INV").limit(1);
+      if (!error && (!data || !data.length) && o.invoiceNo) ({ data, error } = await sb.from("billing_records").select("id,type,number,order_id,invoice_id").eq("number", o.invoiceNo).eq("type", "INV").limit(1));
+      if (!error && data && data.length) {
+        const inv = { id: data[0].id, type: "INV", number: data[0].number, orderId: data[0].order_id };
+        const j = await sb.from("billing_records").select("id,number").eq("invoice_id", inv.id).eq("type", "JO").limit(1);
+        const jo = j.data && j.data.length ? { id: j.data[0].id, type: "JO", number: j.data[0].number, invoiceId: inv.id } : null;
+        return { inv, jo };
+      }
+    } catch (e) {}
     const recs = await billingRecords();
     const inv = recs.find((r) => r.type === "INV" && r.orderId === o.id) || (o.invoiceNo ? recs.find((r) => r.type === "INV" && r.number === o.invoiceNo) : null) || null;
     const jo = inv ? recs.find((r) => r.type === "JO" && r.invoiceId === inv.id) || null : null;
