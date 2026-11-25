@@ -243,6 +243,10 @@ select.pill option { background: var(--bg); color: var(--ink); }
 .docbody { flex: 1; min-height: 0; overflow-y: auto; background: #e9ebef; padding: 14px; }
 #editBody { display: flex; overflow: hidden; }
 .docbody iframe { display: block; flex: 1; width: 100%; height: 100%; min-height: 200px; border: 0; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.14); border-radius: 4px; }
+.docloading { display: flex; align-items: center; justify-content: center; gap: 10px; height: 160px; color: #5b6270; font-size: 14px; }
+.docloading .spin { width: 18px; height: 18px; border: 2px solid #c5cad3; border-top-color: #5b6270; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.docbody iframe.shown { animation: fadeIn .18s ease-out both; }
 .docempty { display: grid; justify-items: center; gap: 12px; padding: 60px 16px; text-align: center; color: #3b4048; }
 @media (max-width: 760px) { .docbody { padding: 8px; } }
 .win.xl:not(.view) .ptabs, .win.xl:not(.view) .tpane { display: none !important; }
@@ -1351,7 +1355,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
   }
   window.addEventListener("message", (e) => {
     if (e.origin !== location.origin || !e.data) return;
-    if (e.data.mrphDoc === "size") { const fr = $("docBody").querySelector("iframe"); if (fr && e.source === fr.contentWindow) fr.style.height = Math.max(200, e.data.h) + "px"; }
+    if (e.data.mrphDoc === "size") { const fr = $("docBody").querySelector("iframe"); if (fr && e.source === fr.contentWindow) { fr.style.height = Math.max(200, e.data.h) + "px"; if (fr._reveal) fr._reveal(); } }
     if (e.data.mrph === "synced") { if (e.data.ok) try { localStorage.setItem("mrph.billingSynced", "1"); } catch (x) {} document.querySelectorAll("iframe[data-sync]").forEach((f) => f.remove()); }
   });
   async function syncDeviceInvoices() {
@@ -1420,7 +1424,11 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       return;
     }
     const fr = h("iframe", { title: show.number, src: `billing.html?embed=1&id=${encodeURIComponent(inv.id)}&doc=${doc}` });
-    body.replaceChildren(fr);
+    fr.style.visibility = "hidden";
+    const loader = h("div", { class: "docloading" }, h("span", { class: "spin" }), "Loading…");
+    body.replaceChildren(loader, fr);
+    fr._reveal = () => { if (fr.style.visibility !== "hidden") return; loader.remove(); fr.style.visibility = ""; fr.classList.add("shown"); };
+    setTimeout(() => fr._reveal && fr._reveal(), 8000);
     foot.replaceChildren(h("div", { class: "right", style: "margin-left:0;margin-right:auto" }, editBtn),
       h("div", { class: "right" }, h("button", { class: "btn", type: "button", text: "Close", "data-close": true }),
         h("button", { class: "btn go", type: "button", text: "Print / Save PDF", onclick: () => { try { fr.contentWindow.postMessage("print", location.origin); } catch (e) {} } })));

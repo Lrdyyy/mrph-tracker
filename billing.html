@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>(function(){var q=location.search;if(/[?&]embed=/.test(q))document.documentElement.className+=" embed-mode";if(/[?&]sync=/.test(q))document.documentElement.className+=" embed-mode";})();</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Invoices &amp; Job Orders · MRPH</title>
@@ -15,6 +16,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Carlito:ital,wght@0,400;0,700;1,400&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
 <style>
+  html.embed-mode, html.embed-mode body{background:transparent!important}
+  html.embed-mode header.top, html.embed-mode .editor, html.embed-mode .toast, html.embed-mode .modal{display:none!important}
+  html.embed-mode main{display:block;padding:0}
   :root{--bg:#f3f4f6;--panel:#fff;--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#1a1a1a;--accent-soft:#f4ecd8;--accent-ink:#fff;--danger:#b42318}
   *{box-sizing:border-box}
   body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
@@ -970,10 +974,39 @@
   window.addEventListener('beforeunload', e => { if(dirty){ e.preventDefault(); e.returnValue=''; } });
 
   // ---------- init ----------
-  await cloudInit();
   const P0 = new URLSearchParams(location.search);
-  if(P0.get('embed')) await pullFor(P0.get('id'));
-  else { await pullAll(); if(canWrite){ const any = (await cloud.from('billing_kv').select('key').eq('key','companies').maybeSingle()).data; if(!any) pushKv('companies'); pushKv('seq'); } }
+  if(P0.get('embed')){
+    document.body.classList.add('embed');
+    const root = document.documentElement.style;
+    let shown = false;
+    const fit = () => {
+      root.setProperty('--fit', String(Math.min(1.4, (window.innerWidth || 794) / 794)));
+      const h = Math.ceil($('#paper').getBoundingClientRect().height);
+      if(shown && window.parent !== window) window.parent.postMessage({mrphDoc:'size', h}, location.origin);
+    };
+    window.addEventListener('resize', fit);
+    const showDoc = (final) => {
+      const i = records.find(r => r.type==='INV' && r.id===P0.get('id'));
+      const d = !i ? null : P0.get('doc')==='JO' ? joFor(i.id) : i;
+      if(!d){ if(!final) return; $('#paper').innerHTML = '<p class="muted" style="text-align:center;padding:60px 20px;font-size:22px">This document is not available.</p>'; shown = true; fit(); return; }
+      document.title = `${d.number} - ${d.custName || 'client'}`;
+      renderPaper(d); shown = true; fit();
+      $$('#paper img').forEach(im => { if(!im.complete) im.addEventListener('load', fit, {once:true}); });
+      if(document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+    };
+    window.addEventListener('message', async e => {
+      if(e.origin !== location.origin) return;
+      if(e.data === 'print'){ try{ window.print(); }catch(err){} }
+      if(e.data === 'reload'){ records = ((await DB.get('records')) || []).map(cleanRecord).filter(Boolean); showDoc(true); }
+    });
+    showDoc(false);
+    await cloudInit();
+    const changed = await pullFor(P0.get('id'));
+    if(changed || !shown) showDoc(true);
+    return;
+  }
+  await cloudInit();
+  { await pullAll(); if(canWrite){ const any = (await cloud.from('billing_kv').select('key').eq('key','companies').maybeSingle()).data; if(!any) pushKv('companies'); pushKv('seq'); } }
   DB.set('companies', companies); if(records.length){ DB.set('records', records); if(P0.get('sync')) await syncPush(); else if(!P0.get('embed')) syncPush(); }
   try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}   // ask the phone not to auto-clear data
   if('serviceWorker' in navigator && location.protocol.startsWith('http')){
@@ -983,33 +1016,6 @@
   const P = new URLSearchParams(location.search);
   const FRAMED = !!P.get('frame') && window.parent !== window;
   if(P.get('sync')){ if(pushing) await pushing; window.parent !== window && window.parent.postMessage({mrph:'synced', ok: cloudOn && canWrite}, location.origin); return; }
-  if(P.get('embed')){
-    document.body.classList.add('embed');
-    const root = document.documentElement.style;
-    const fit = () => {
-      root.setProperty('--fit', String(Math.min(1.4, (window.innerWidth || 794) / 794)));
-      const h = Math.ceil($('#paper').getBoundingClientRect().height);
-      if(window.parent !== window) window.parent.postMessage({mrphDoc:'size', h}, location.origin);
-    };
-    window.addEventListener('resize', fit);
-    const showDoc = () => {
-      const i = records.find(r => r.type==='INV' && r.id===P.get('id'));
-      const d = !i ? null : P.get('doc')==='JO' ? joFor(i.id) : i;
-      if(!d){ $('#paper').innerHTML = '<p class="muted" style="text-align:center;padding:60px 20px;font-size:22px">Not found on this device.</p>'; return; }
-      document.title = `${d.number} - ${d.custName || 'client'}`;
-      renderPaper(d); fit();
-      $$('#paper img').forEach(im => { if(!im.complete) im.addEventListener('load', fit, {once:true}); });
-      if(document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
-    };
-    showDoc();
-    window.addEventListener('message', async e => {
-      if(e.origin !== location.origin) return;
-      if(e.data === 'print'){ try{ window.print(); }catch(err){} }
-      if(e.data === 'reload'){ records = ((await DB.get('records')) || []).map(cleanRecord).filter(Boolean); showDoc(); }
-    });
-    window.parent && window.parent.postMessage({mrphDoc:'ready'}, location.origin);
-    return;
-  }
   if(FRAMED) document.body.classList.add('framed');
   inv = blankInvoice(companies[0].id);
   fillForm(); setMode('INV');
