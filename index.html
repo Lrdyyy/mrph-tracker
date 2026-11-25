@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover">
 <title>MRPH Order Tracker</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#172636">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MRPH">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
@@ -834,7 +842,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     const { data, error } = await sb.from("orders").select("*").order("created_at", { ascending: false }).limit(2000);
     const note = $("loadNote");
     if (error) { note.textContent = "Couldn't load orders. " + (/fetch|network/i.test(error.message) ? "Check your connection." : "Reload the page."); note.hidden = false; S.loaded = true; paint(); return; }
-    note.hidden = true; S.orders = (data || []).map(norm); S.loaded = true; paint();
+    note.hidden = true; S.orders = (data || []).map(norm); S.loaded = true; paint(); applyBillingLinks();
   }
   async function loadPeople() {
     const { data } = await sb.from("profiles").select("id,name,email,role");
@@ -894,6 +902,8 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       h("div", { class: "navhead", text: "Payment" }),
       btn("pay:partial", h("span", { class: "sd", style: "background:var(--st-pending-fg)" }), "Partial payment", live.filter((o) => o.paymentStatus !== "Fully Paid" && o.status !== "Cancelled").length),
       (() => { const n = live.filter(isOverdue).length; const b = btn("pay:overdue", h("span", { class: "ic", text: "!" }), "Unpaid 3+ days", null); if (n) b.append(h("span", { class: "badge red", text: String(n) })); else b.append(h("span", { class: "n", text: "0" })); return b; })());
+    nav.append(h("div", { class: "navhead", text: "Billing" }), h("a", { class: "navbtn", href: "billing.html", style: "text-decoration:none" }, h("span", { class: "ic", text: "₱" }), h("span", { class: "lab", text: "Invoices & Job Orders" })));
+    if (installEvt) nav.append(h("button", { class: "navbtn", type: "button", onclick: async () => { const e = installEvt; installEvt = null; paintNav(); e.prompt(); try { await e.userChoice; } catch (x) {} } }, h("span", { class: "ic", text: "⤓" }), h("span", { class: "lab", text: "Install app" })));
     if (S.isOwner) {
       const waiting = Object.values(S.people).filter((p) => p.role === "pending" && p.email !== OWNER_EMAIL.toLowerCase()).length;
       nav.append(h("div", { class: "navhead", text: "Admin" }), h("button", { class: "navbtn", type: "button", onclick: openIam }, h("span", { class: "ic", text: "⚿" }), h("span", { class: "lab", text: "Team access" }), waiting ? h("span", { class: "badge", text: `${waiting} waiting` }) : null));
@@ -1225,6 +1235,55 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
       h("div", { class: "irows" }, rows), h("div", { class: "itotalrow" }, h("span", { text: "Total" }), h("span", { class: "itotal mono", text: money(any ? t : null) })));
   }
 
+  /* ---------- billing (invoices & job orders, saved on this device) ---------- */
+  let installEvt = null;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; if (S.user) paintNav(); });
+  window.addEventListener("appinstalled", () => { installEvt = null; if (S.user) paintNav(); });
+  const BillDB = {
+    open() { return this.p || (this.p = new Promise((res) => { try { const r = indexedDB.open("iom", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => res(null); } catch (e) { res(null); } })); },
+    async get(k) { const db = await this.open(); if (!db) return undefined; return new Promise((res) => { try { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); } catch (e) { res(undefined); } }); },
+    async set(k, v) { const db = await this.open(); if (!db) return false; return new Promise((res) => { try { const t = db.transaction("kv", "readwrite"); t.objectStore("kv").put(v, k); t.oncomplete = () => res(true); t.onerror = () => res(false); } catch (e) { res(false); } }); }
+  };
+  async function photoData(path) {
+    try {
+      const [u] = await signedUrls([path]); if (!u) return "";
+      const bmp = await createImageBitmap(await (await fetch(u)).blob());
+      const sc = Math.min(1, 1400 / Math.max(bmp.width, bmp.height)); const c = document.createElement("canvas");
+      c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc);
+      const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height); if (bmp.close) bmp.close();
+      return c.toDataURL("image/jpeg", 0.82);
+    } catch (e) { return ""; }
+  }
+  async function toBilling(o, want, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = "Opening…"; }
+    let items = S.openId === o.id ? S.items : null;
+    if (!items) { const { data } = await sb.from("order_items").select("*").eq("order_id", o.id).order("position"); items = data || []; }
+    const contact = ((o.remarks || "").match(/contact(?: (?:no\.?|number))?\s*[:：]\s*([^;\n]+)/i) || [])[1] || "";
+    const out = [];
+    for (const r of items) out.push({ name: r.description || "", dims: r.size || "", details: r.backlights ? blText(r) : "", qty: Number(r.qty || 1), price: r.unit_price == null ? 0 : Number(r.unit_price), photo: r.photos && r.photos[0] ? await photoData(r.photos[0]) : "" });
+    await BillDB.set("handoff", { at: Date.now(), want, orderId: o.id, orderNo: o.orderNo || "", name: o.name || "", company: o.company || "", address: o.address || "", contact: contact.trim(), invoiceNo: o.invoiceNo || "", jobOrderNo: o.jobOrderNo || "", items: out });
+    location.href = "billing.html";
+  }
+  let linking = false;
+  async function applyBillingLinks() {
+    if (linking || !S.loaded || !can.edit()) return; linking = true;
+    try {
+      const q = (await BillDB.get("links")) || []; if (!q.length) return;
+      const left = [];
+      for (const l of q) {
+        const o = S.orders.find((x) => x.id === l.orderId);
+        if (!o) continue;
+        const patch = {}; if (l.patch.invoice_no && l.patch.invoice_no !== o.invoiceNo) patch.invoice_no = String(l.patch.invoice_no).slice(0, 100); if (l.patch.job_order_no && l.patch.job_order_no !== o.jobOrderNo) patch.job_order_no = String(l.patch.job_order_no).slice(0, 100);
+        if (!Object.keys(patch).length) continue;
+        try { await updateOrder(o.id, patch); if (patch.invoice_no) o.invoiceNo = patch.invoice_no; if (patch.job_order_no) o.jobOrderNo = patch.job_order_no; toast(`${o.orderNo || o.name}: ${[patch.invoice_no, patch.job_order_no].filter(Boolean).join(" · ")} saved to the order`); }
+        catch (e) { left.push(l); }
+      }
+      await BillDB.set("links", left); paint();
+    } finally { linking = false; }
+  }
+  window.addEventListener("pageshow", () => applyBillingLinks());
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) applyBillingLinks(); });
+
   /* ---------- order details ---------- */
   const EDIT_FIELDS = [["name", "Name"], ["company", "Company"], ["status", "Status"], ["paymentStatus", "Payment"], ["assignee", "Assignee"], ["invoiceNo", "Invoice No."], ["jobOrderNo", "Job Order No."], ["address", "Address"], ["remarks", "Remarks"]];
   const COL = { name: "name", company: "company", status: "status", paymentStatus: "payment_status", assignee: "assignee", invoiceNo: "invoice_no", jobOrderNo: "job_order_no", address: "address", remarks: "remarks" };
@@ -1294,7 +1353,11 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     $("dKicker").textContent = o.orderNo || ""; $("dTitle").textContent = o.name || "Untitled";
     if (!S.editing) {
       snapshotVals = null; detailEd = null; applyMode();
-      $("viewFoot").replaceChildren(h("div", { class: "right" }, h("button", { class: "btn", type: "button", "data-close": true, text: "Close" }), can.edit() ? h("button", { class: "btn go", type: "button", text: "Edit", onclick: startEdit }) : null));
+      $("viewFoot").replaceChildren(
+        h("div", { class: "right", style: "margin-left:0;margin-right:auto;flex-wrap:wrap" },
+          h("button", { class: "btn", type: "button", text: o.invoiceNo ? `Invoice ${o.invoiceNo}` : "Create invoice", onclick: (e) => toBilling(o, "INV", e.currentTarget) }),
+          h("button", { class: "btn", type: "button", text: o.jobOrderNo ? `Job order ${o.jobOrderNo}` : "Create job order", onclick: (e) => toBilling(o, "JO", e.currentTarget) })),
+        h("div", { class: "right" }, h("button", { class: "btn", type: "button", "data-close": true, text: "Close" }), can.edit() ? h("button", { class: "btn go", type: "button", text: "Edit", onclick: startEdit }) : null));
       return;
     }
     if (isOverdue(o)) body.append(h("div", { class: "notice late", text: `Payment still partial after ${unpaidDays(o)} days (since ${fmtTime(o.paymentSince)}). Set Payment to Fully Paid once settled.` }));
@@ -1646,6 +1709,23 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
         items.push({ description: desc.slice(0, 300), size: col.size != null ? cellText(row[col.size]).slice(0, 80) : "", qty: qty > 0 ? qty : 1, price, row: r });
       }
     }
+    let layout = hdrRow >= 0 ? "table" : "";
+    if (!items.length) {
+      let cur = null;
+      const lab = (t) => { const m = t.match(/^(details|description|item description|dimensions?|size|quantity|qty)\s*[:：]\s*(.*)$/i); return m ? [m[1].toLowerCase(), m[2]] : null; };
+      for (let r = 0; r < rows.length; r++) {
+        const row = (rows[r] || []).map(cellText);
+        for (let c = 0; c < row.length; c++) {
+          const l = lab(row[c]); if (!l) continue;
+          let [k, v] = l; if (!v) for (let j = c + 1; j < row.length && !v; j++) v = lab(row[j]) ? "" : row[j];
+          if (/^(details|description|item description)$/.test(k)) { cur = { description: v.slice(0, 300), size: "", qty: 1, price: null, row: r }; items.push(cur); }
+          else if (!cur) continue;
+          else if (/^(dimension|dimensions|size)$/.test(k)) cur.size = v.slice(0, 80);
+          else { const q = cellNum(v); if (q > 0) cur.qty = q; }
+        }
+      }
+      if (items.length) layout = "blocks";
+    }
     const all = rows.flat().map(cellText).join(" \n ");
     const co = all.match(/cebu\s*mirrors?|mirrora/i);
     if (co) d.company = /cebu/i.test(co[0]) ? "Cebu Mirrors" : "Mirrora";
@@ -1654,7 +1734,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     else if (/partial\s*payment|down\s*payment/i.test(payText)) d.paymentStatus = "Partial Payment";
     if (!d.remarks) { const bits = [d.contact && `Contact: ${d.contact}`, d.date && `Date: ${d.date}`, d.deadline && `Deadline: ${d.deadline}`].filter(Boolean); if (bits.length) d.remarks = bits.join("; "); }
     if (!items.length && !d.name && !d.address) d.rawText = all.replace(/\s*\n\s*/g, " | ").slice(0, 1000);
-    return { d, items };
+    return { d, items, hdr: hdrRow, layout };
   }
 
   async function sheetFile(file) {
@@ -1735,12 +1815,87 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     return null;
   }
 
+  const mulM = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
+  async function pdfImageBoxes(page) {
+    const ops = await page.getOperatorList(), OPS = pdfjsLib.OPS, out = [], seen = new Set();
+    let ctm = [1, 0, 0, 1, 0, 0]; const stack = [];
+    for (let i = 0; i < ops.fnArray.length; i++) {
+      const fn = ops.fnArray[i], args = ops.argsArray[i];
+      if (fn === OPS.save) stack.push(ctm);
+      else if (fn === OPS.restore) ctm = stack.pop() || [1, 0, 0, 1, 0, 0];
+      else if (fn === OPS.transform) ctm = mulM(ctm, args);
+      else if (fn === OPS.paintFormXObjectBegin) { stack.push(ctm); if (args && Array.isArray(args[0]) && args[0].length === 6) ctm = mulM(ctm, args[0]); }
+      else if (fn === OPS.paintFormXObjectEnd) ctm = stack.pop() || [1, 0, 0, 1, 0, 0];
+      else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject) {
+        const pts = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => [ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]]);
+        const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+        const box = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+        const ref = fn === OPS.paintImageXObject ? args[0] : null;
+        const key = ref ? "id:" + ref : "inline" + i; if (seen.has(key)) continue; seen.add(key);
+        out.push({ ...box, ref, inline: ref ? null : args[0] });
+      }
+    }
+    return out;
+  }
+  async function pdfImageObj(page, b) {
+    if (b.inline) return b.inline;
+    const store = String(b.ref).startsWith("g_") ? page.commonObjs : page.objs;
+    return await Promise.race([new Promise((res) => store.get(b.ref, res)), new Promise((res) => setTimeout(() => res(null), 5000))]);
+  }
+  function imgObjCanvas(img) {
+    if (!img) return null;
+    if (img.bitmap) { const c = document.createElement("canvas"); c.width = img.bitmap.width; c.height = img.bitmap.height; const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img.bitmap, 0, 0); return c; }
+    const w = img.width, h = img.height, d = img.data; if (!d || !w || !h) return null;
+    const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d"); const im = g.createImageData(w, h), o = im.data, n = w * h;
+    if (img.kind === 3) { for (let k = 0; k < n; k++) { const a = d[k * 4 + 3] / 255; o[k * 4] = d[k * 4] * a + 255 * (1 - a); o[k * 4 + 1] = d[k * 4 + 1] * a + 255 * (1 - a); o[k * 4 + 2] = d[k * 4 + 2] * a + 255 * (1 - a); o[k * 4 + 3] = 255; } }
+    else if (img.kind === 2) { for (let k = 0; k < n; k++) { o[k * 4] = d[k * 3]; o[k * 4 + 1] = d[k * 3 + 1]; o[k * 4 + 2] = d[k * 3 + 2]; o[k * 4 + 3] = 255; } }
+    else if (img.kind === 1) { const rb = Math.ceil(w / 8); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = (d[y * rb + (x >> 3)] >> (7 - (x & 7))) & 1 ? 255 : 0; const k = (y * w + x) * 4; o[k] = o[k + 1] = o[k + 2] = v; o[k + 3] = 255; } }
+    else return null;
+    g.putImageData(im, 0, 0); return c;
+  }
+  async function pdfImages(doc, pageCount, keep) {
+    const out = [];
+    for (let p = 1; p <= pageCount && out.length < 30; p++) {
+      const page = await doc.getPage(p);
+      const [px0, py0, px1, py1] = page.view; const pageArea = (px1 - px0) * (py1 - py0);
+      const boxes = (await pdfImageBoxes(page)).filter((b) => {
+        const w = Math.min(b.x1, px1) - Math.max(b.x0, px0), ht = Math.min(b.y1, py1) - Math.max(b.y0, py0);
+        return w >= 36 && ht >= 36 && w * ht < pageArea * 0.8 && keep(p, b, page.view);
+      });
+      let rendered = null;
+      for (const b of boxes) {
+        let c = null;
+        try { c = imgObjCanvas(await pdfImageObj(page, b)); } catch (e) { c = null; }
+        if (!c || c.width < 20 || c.height < 20) {
+          if (!rendered) {
+            const vp = page.getViewport({ scale: Math.min(3, 2000 / page.getViewport({ scale: 1 }).width) });
+            const rc = document.createElement("canvas"); rc.width = Math.ceil(vp.width); rc.height = Math.ceil(vp.height);
+            const g = rc.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, rc.width, rc.height);
+            await page.render({ canvasContext: g, viewport: vp }).promise; rendered = { rc, vp };
+          }
+          const r = rendered.vp.convertToViewportRectangle([b.x0, b.y0, b.x1, b.y1]);
+          const x = Math.max(0, Math.floor(Math.min(r[0], r[2]))), y = Math.max(0, Math.floor(Math.min(r[1], r[3])));
+          const w = Math.min(rendered.rc.width - x, Math.ceil(Math.abs(r[2] - r[0]))), ht = Math.min(rendered.rc.height - y, Math.ceil(Math.abs(r[3] - r[1])));
+          if (w < 20 || ht < 20) continue;
+          c = document.createElement("canvas"); c.width = w; c.height = ht; c.getContext("2d").drawImage(rendered.rc, x, y, w, ht, 0, 0, w, ht);
+        }
+        const hash = dHash(c, c.width, c.height); if (LOGO_HASHES.some(([, ref]) => hamming(hash, ref) <= 20)) continue;
+        const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.9)); c.width = c.height = 0; if (!blob) continue;
+        out.push({ page: p, y: (b.y0 + b.y1) / 2, top: b.y1, blob });
+      }
+      if (rendered) rendered.rc.width = rendered.rc.height = 0;
+      page.cleanup();
+    }
+    return out;
+  }
+
   async function pdfFile(file) {
     await Promise.all([loadScript("pdf"), loadScript("pdfWorker")]);
     pdfjsLib.GlobalWorkerOptions.workerSrc = LIBS.pdfWorker;
     const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-    const rows = [];
-    for (let p = 1; p <= Math.min(doc.numPages, 10); p++) {
+    const pageCount = Math.min(doc.numPages, 10);
+    const rows = [], pos = [];
+    for (let p = 1; p <= pageCount; p++) {
       const tc = await (await doc.getPage(p)).getTextContent();
       const bits = tc.items.filter((i) => i.str && i.str.trim()).map((i) => ({ s: i.str, x: i.transform[4], y: i.transform[5], w: i.width || 0, fs: i.height || 10 }));
       bits.sort((a, b) => b.y - a.y || a.x - b.x);
@@ -1753,18 +1908,46 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
         for (const b of ln.bits) { fs = Math.max(fs, b.fs); if (end != null && b.x - end < 8 && cells.length) cells[cells.length - 1].s += (b.x - end > 1 ? " " : "") + b.s; else cells.push({ s: b.s, x: b.x }); end = b.x + b.w; }
         /* a lone line right under a cell and lined up with it is that cell's text wrapping onto the next line */
         const prev = page[page.length - 1];
-        if (prev && cells.length === 1 && prev.y - ln.y <= prev.fs * 1.8 && !/^(sub ?total|total|grand total|balance|vat|discount|amount due)\b/i.test(cells[0].s) && !/[:：]$/.test(cells[0].s)) {
+        if (prev && cells.length === 1 && prev.y - ln.y <= prev.fs * 1.8 && !/^(sub ?total|total|grand total|balance|vat|discount|amount due)\b/i.test(cells[0].s) && !/[:：]$/.test(cells[0].s) && !/^(details|description|dimensions?|size|quantity|qty|item \d+)\b/i.test(cells[0].s) && !(cells[0].s.match(/^([^:：]{2,28})[:：]/) && importLabel(cells[0].s.split(/[:：]/)[0]))) {
           const tgt = prev.cells.find((c) => Math.abs(c.x - cells[0].x) <= 4);
           if (tgt) { tgt.s += " " + cells[0].s; prev.y = ln.y; continue; }
         }
         page.push({ y: ln.y, fs, cells });
       }
-      rows.push(...page.map((r) => r.cells.map((c) => c.s)));
+      for (const r of page) { rows.push(r.cells.map((c) => c.s)); pos.push({ page: p, y: r.y }); }
     }
-    if (!rows.length) throw new Error("No text found. It may be a scanned PDF; try importing a photo of it instead.");
-    const res = parseRows(rows);
-    if (!res.d.company) { const co = await pdfLogoCompany(doc); if (co) res.d.company = co; }
-    return { ...res, photos: [] };
+    const res = rows.length ? parseRows(rows) : { d: {}, items: [], hdr: -1 };
+    if (rows.length && !res.d.company) { const co = await pdfLogoCompany(doc); if (co) res.d.company = co; }
+    const hdr = res.hdr >= 0 ? pos[res.hdr] : null;
+    let photos = [];
+    try {
+      photos = await pdfImages(doc, pageCount, (p, b, view) => {
+        const cy = (b.y0 + b.y1) / 2;
+        if (res.layout === "blocks") { const f = pos[res.items[0].row]; return p > f.page || (p === f.page && cy < f.y); }
+        if (hdr) return p > hdr.page || (p === hdr.page && cy < hdr.y);
+        return p > 1 || b.y0 < view[3] - (view[3] - view[1]) * 0.18;
+      });
+    } catch (e) { photos = []; }
+    if (!rows.length && !photos.length) throw new Error("No text found. It may be a scanned PDF; try importing a photo of it instead.");
+    if (res.items.length) {
+      photos = photos.map((ph) => {
+        const same = res.items.filter((it) => pos[it.row].page === ph.page);
+        const pool = same.length ? same : res.items.filter((it) => pos[it.row].page < ph.page);
+        const list = pool.length ? pool : res.items;
+        let tgt;
+        if (res.layout === "blocks") {
+          const above = res.items.filter((it) => pos[it.row].page < ph.page || (pos[it.row].page === ph.page && pos[it.row].y >= ph.y));
+          tgt = above.length ? above[above.length - 1] : res.items[0];
+        } else tgt = same.length
+          ? list.reduce((best, it) => Math.abs(pos[it.row].y - ph.y) < Math.abs(pos[best.row].y - ph.y) ? it : best, list[0])
+          : list[list.length - 1];
+        return { row: tgt.row, blob: ph.blob };
+      });
+    } else if (photos.length) {
+      photos.forEach((ph, i) => res.items.push({ description: "", size: "", qty: 1, price: null, row: 100000 + i }));
+      photos = photos.map((ph, i) => ({ row: 100000 + i, blob: ph.blob }));
+    }
+    return { ...res, photos };
   }
 
   async function importFiles(files) {
@@ -1859,6 +2042,7 @@ const ALLOW_SIGNUP = CFG.ALLOW_SIGNUP === true;
     if (!list.length) box.append(h("p", { class: "meta", style: "margin:6px 0 0", text: q ? "No one matches." : "No accounts yet." }));
   }
 })();
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) { try { navigator.serviceWorker.register("sw.js").catch(() => {}); } catch (e) {} }
 </script>
 </body>
 </html>

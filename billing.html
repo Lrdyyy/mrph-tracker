@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invoices &amp; Job Orders · MRPH</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#172636">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MRPH">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Carlito:ital,wght@0,400;0,700;1,400&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#f3f4f6;--panel:#fff;--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#1a1a1a;--accent-soft:#f4ecd8;--accent-ink:#fff;--danger:#b42318}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  button,input,select,textarea{font:inherit;color:inherit}
+  header.top{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--line);border-top:4px solid var(--accent);padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  header.top h1{font-size:16px;margin:0 8px 0 0;white-space:nowrap}
+  .sp{flex:1}
+  select,input,textarea{border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:#fff;width:100%}
+  textarea{resize:vertical;min-height:56px}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:#f9fafb}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+  .btn.primary:hover{filter:brightness(1.1)}
+  .btn.danger{color:var(--danger)}
+  .btn.sm{padding:4px 8px;font-size:12px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{border:0;background:#fff;padding:7px 14px;cursor:pointer}
+  .seg button.on{background:var(--accent);color:var(--accent-ink)}
+  #companySel{width:auto;min-width:170px;font-weight:600}
+  #companySel:disabled{opacity:.7;cursor:not-allowed}
+  main{display:grid;grid-template-columns:minmax(340px,460px) 1fr;gap:16px;padding:16px;align-items:start}
+  @media (max-width:1000px){main{grid-template-columns:1fr}}
+  @media (max-width:640px){
+    header.top{position:static;padding:10px 10px calc(10px) ;padding-top:max(10px, env(safe-area-inset-top))}
+    header.top h1{display:none}
+    #companySel{flex:1}
+    main{padding:10px}
+    .modal .rec{grid-template-columns:1fr 1fr;row-gap:4px}
+    .modal .rec > div:last-child{grid-column:1/-1}
+    .modal .box{padding:14px}
+    .paperWrap{overflow-x:auto}
+    #paper{width:210mm;zoom:.46}
+  }
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+  .card h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .f{display:flex;flex-direction:column;gap:4px}
+  .f label{font-size:12px;color:var(--muted)}
+  .f.chk{flex-direction:row;align-items:center;gap:8px}
+  .f.chk input{width:auto}
+  .full{grid-column:1/-1}
+  .hint{font-size:11.5px;color:var(--muted);margin:2px 0 0}
+  .item{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;position:relative}
+  .item .ttl{grid-column:1/-1;font-weight:600;font-size:12px;color:var(--muted)}
+  .item .x{position:absolute;top:6px;right:6px}
+  .item .amt{text-align:right;font-weight:600;align-self:end;padding-bottom:8px}
+  .photoRow{grid-column:1/-1;display:flex;gap:10px;align-items:center}
+  .photoRow img{width:84px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+  .photoRow .ph0{width:84px;height:60px;border:1px dashed #cbd5e1;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px}
+  body.mode-inv .jo-only{display:none!important}
+  body.mode-jo .inv-only{display:none!important}
+  .bigbtn{display:block;width:100%;padding:14px;font-size:16px;font-weight:600;border-radius:12px;margin-bottom:6px}
+  .banner{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--accent-soft);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:13px}
+  .joq{font-size:15px;font-weight:600;margin:0 0 8px}
+  .joq-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .joq-row select{flex:1;min-width:220px;font-weight:600}
+  details.card summary{cursor:pointer;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+  details.card[open] summary{margin-bottom:10px}
+
+  /* ================= PAPER ================= */
+  .paperWrap{overflow:auto}
+  #paper{background:#fff;width:210mm;min-height:297mm;margin:0 auto;box-shadow:0 4px 20px rgba(0,0,0,.08);color:#000}
+
+  /* ---- Invoice (Calibri style) ---- */
+  .iv{font-family:Carlito,Calibri,'Segoe UI',Arial,sans-serif;font-size:11px;line-height:1.35;padding:9mm 12mm 10mm}
+  .iv-no{display:inline-block;background:var(--box,#e8e3d3);color:var(--box-ink,#111);font-weight:700;font-size:24px;padding:5px 10px 4px;letter-spacing:.01em}
+  .iv-meta{margin:16px 0 0;border-collapse:collapse}
+  .iv-meta td{padding:0 0 18px;vertical-align:top}
+  .iv-meta td:first-child{width:116px}
+  .iv-meta b{display:block}
+  table.iv-items{width:100%;border-collapse:collapse;margin-top:-4px}
+  table.iv-items th{font-weight:700;text-align:left;padding:1px 4px;border-top:1px solid #000;border-bottom:1px solid #000;font-size:11px}
+  table.iv-items th.c{text-align:center}
+  table.iv-items td{vertical-align:top;padding:4px}
+  table.iv-items tbody td{padding-top:14px}
+  table.iv-items tbody tr:first-child td{padding-top:26px}
+  .iv-items .ph{width:120px;padding-left:0}
+  .iv-items .ph img{width:110px;height:84px;object-fit:cover;display:block;margin-top:2px}
+  .iv-items .desc b{display:block;font-weight:700}
+  .iv-items .desc i{display:block}
+  .iv-items tbody tr:first-child td.num{padding-top:41px}
+  .iv-items tbody tr td.num{padding-top:29px}
+  .iv-items tbody tr:first-child td.num{padding-top:41px}
+  .iv-items .c{text-align:center}
+  .iv-items .r{text-align:right}
+  .iv-items .cur{width:50px}
+  .iv-items .spacer td{height:70px}
+  table.iv-tot{width:36%;margin-left:auto;border-collapse:collapse;margin-right:4px}
+  table.iv-tot td{padding:1px 2px}
+  table.iv-tot td:nth-child(2){width:56px}
+  table.iv-tot td:last-child{text-align:right}
+  table.iv-tot .sub td{font-weight:700;border-top:1px solid #000;border-bottom:1px solid #000;padding:2px}
+  table.iv-tot .gap td{height:16px}
+  table.iv-tot .fee td:last-child{padding-right:16px}
+  table.iv-tot .grand td{font-weight:700;border-top:1px solid #000;border-bottom:3px double #000;padding:3px 2px 2px}
+  table.iv-tot .bal td{font-weight:700;padding-top:3px}
+  .iv-rule{border:0;border-top:2px solid #333;margin:28px 0 14px}
+  .iv-pay{white-space:pre-line;margin:0}
+  .iv-acct{white-space:pre-line;margin:6px 0 0;font-weight:700}
+  .iv-th{text-align:center;font-weight:700;margin:22px 0 14px;font-size:11.5px}
+  .iv-terms{text-align:center;white-space:pre-line}
+  .iv-terms .l{text-align:left}
+  .iv-foot{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:30px}
+  .iv-foot .logo{width:150px;height:150px;object-fit:contain}
+  .iv-foot .brand{font-family:Poppins,Arial,sans-serif;font-weight:700;font-size:38px;line-height:1;letter-spacing:-.01em}
+  .iv-foot .tg{font-size:13px;letter-spacing:.02em;margin:2px 0 10px}
+  .iv-foot .addr{font-weight:700;margin-bottom:8px}
+  .iv-foot .ln{display:flex;align-items:center;gap:4px;font-size:9.5px;font-weight:700;margin-bottom:6px}
+  .iv-foot .ln svg{flex:none}
+
+  /* ---- Job order (Word style) ---- */
+  .jo{font-family:Arial,Helvetica,sans-serif;font-size:16.5px;line-height:1.55;padding:8mm 12mm 12mm;text-transform:uppercase}
+  .jo-logo{width:46%;height:136px;border:2px solid var(--logo-border,#f6dccd);background:var(--logo-bg,#fbf9f7);display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .jo-logo img{width:100%;height:100%;object-fit:cover}
+  .jo-logo .txt{font-family:Poppins,Arial,sans-serif;font-size:34px;font-weight:600;letter-spacing:.08em;color:var(--logo-ink,#a8875a);text-align:center;line-height:1.1}
+  table.jo-tbl{width:100%;border-collapse:collapse;margin-top:20px}
+  table.jo-tbl td{border:1px solid #000;padding:2px 12px 4px;vertical-align:top;height:62px}
+  table.jo-tbl td:nth-child(1){width:22%}
+  table.jo-tbl td:nth-child(2){width:33.5%;font-weight:700}
+  table.jo-tbl td:nth-child(3){width:19%}
+  .jo .red{color:#e00000;font-weight:700}
+  .jo-item{margin-top:28px;break-inside:avoid;page-break-inside:avoid}
+  .jo-item + .jo-item{margin-top:22px;padding-top:18px;border-top:1px dashed #bbb}
+  .jo-item .itemno{font-weight:700;margin-bottom:6px}
+  .jo-row{display:flex;gap:0}
+  .jo-row .k{flex:none;width:184px}
+  .jo-row .k.short{width:auto;margin-right:8px}
+  .jo-qty{color:#e00000;font-weight:700;text-decoration:underline;margin-left:110px}
+  .jo-photo{display:block;width:100%;height:80mm;object-fit:cover;margin-top:14px;break-before:avoid;page-break-before:avoid}
+  .jo-note{text-align:center;color:#e00000;font-weight:700;margin-top:36px;white-space:pre-line;break-inside:avoid;page-break-inside:avoid}
+
+  /* ================= MODALS ================= */
+  .modal{position:fixed;inset:0;background:rgba(17,24,39,.45);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:40px 12px;overflow:auto}
+  .modal.open{display:flex}
+  .modal .box{background:#fff;border-radius:14px;width:100%;max-width:780px;padding:18px}
+  .modal h2{margin:0 0 12px;font-size:17px}
+  .rec{display:grid;grid-template-columns:1.2fr 1.4fr .8fr .9fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .rec .no{font-weight:600}
+  a.btn{text-decoration:none;display:inline-block}
+  .tag.ord{background:#e0eafc;color:#1a4aa8}
+  .tag{font-size:11px;padding:2px 7px;border-radius:99px;background:var(--accent-soft);color:var(--ink);font-weight:600}
+  .logoPick{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .logoPick img{max-height:48px;max-width:140px;border:1px solid var(--line);border-radius:6px}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:9px 14px;border-radius:8px;opacity:0;transition:.25s;pointer-events:none;z-index:60}
+  .toast.show{opacity:1}
+  .muted{color:var(--muted)}
+
+  @media print{
+    @page{size:A4;margin:0}
+    body{background:#fff}
+    header.top,.editor,.modal,.toast{display:none!important}
+    main{display:block;padding:0}
+    .paperWrap{overflow:visible}
+    #paper{box-shadow:none;width:210mm;min-height:auto;margin:0;zoom:1}
+    #paper,#paper *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .jo-item{break-inside:avoid;page-break-inside:avoid}
+  }
+</style>
+</head>
+<body class="mode-inv">
+
+<header class="top">
+  <a class="btn" href="./" id="backOrders">← Orders</a>
+  <h1>Invoices &amp; Job Orders</h1>
+  <select id="companySel" title="Company"></select>
+  <div class="seg" id="typeSeg">
+    <button data-type="INV" class="on">Invoice</button>
+    <button data-type="JO">Job Order</button>
+  </div>
+  <div class="sp"></div>
+  <button class="btn inv-only" id="btnNew">+ New invoice</button>
+  <button class="btn" id="btnRecords">Records</button>
+  <button class="btn" id="btnSettings">Company settings</button>
+  <button class="btn" id="btnPrint">Print / Save PDF</button>
+</header>
+
+<main>
+  <section class="editor">
+    <!-- ============ INVOICE FORM ============ -->
+    <div class="inv-only">
+
+      <div class="card">
+        <h3>Invoice</h3>
+        <div class="grid2">
+          <div class="f"><label>Invoice no. <span style="font-size:11px">(you can edit this)</span></label><input data-k="number"></div>
+          <div class="f"><label>Date</label><input type="date" data-k="date"></div>
+          <div class="f full"><label>Payment status (for your records only)</label>
+            <select data-k="payStatus"><option>Unpaid</option><option>Downpayment received</option><option>Fully paid</option></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Invoice for</h3>
+        <div class="grid2">
+          <div class="f full"><label>Client's name</label><input data-k="custName"></div>
+          <div class="f full"><label>Contact number</label><input data-k="custPhone"></div>
+          <div class="f full"><label>Address</label><textarea data-k="custAddress" rows="2"></textarea></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Items</h3>
+        <div id="items"></div>
+        <button class="btn" id="btnAddItem">+ Add item</button>
+        <input type="file" id="photoFile" accept="image/*" hidden>
+      </div>
+
+      <div class="card">
+        <h3>Totals</h3>
+        <div class="grid2">
+          <div class="f"><label>Delivery fee (Php)</label><input type="number" step="0.01" min="0" data-k="deliveryFee"></div>
+          <div class="f"><label>Installation fee (Php)</label><input type="number" step="0.01" min="0" data-k="installFee"></div>
+          <div class="f"><label>Downpayment (Php)</label><input type="number" step="0.01" min="0" data-k="paid"></div>
+          <div class="f"><label>Discount (Php, optional)</label><input type="number" step="0.01" min="0" data-k="discount"></div>
+          <div class="f full chk"><input type="checkbox" id="vatChk" data-k="vat"><label for="vatChk" style="color:inherit">Add 12% VAT</label></div>
+        </div>
+      </div>
+
+      <details class="card" id="joDetails">
+        <summary>Job order details</summary>
+        <p class="hint" style="margin:0 0 10px">Only printed on the job order. Fill these in now and you won't have to type them again.</p>
+        <div class="grid2">
+          <div class="f full"><label>Deadline</label><input type="date" data-k="deadline"></div>
+          <div class="f full"><label>Note (one per line)</label><textarea data-k="joNote" rows="2"></textarea></div>
+        </div>
+      </details>
+
+      <button class="btn primary bigbtn" id="btnSave">Create invoice</button>
+      <div class="banner" id="invBanner" style="display:none;margin-top:12px"></div>
+    </div>
+
+    <!-- ============ JOB ORDER: one question ============ -->
+    <div class="jo-only card">
+      <p class="joq">Create job order for invoice</p>
+      <div class="joq-row">
+        <select id="joInvSel"></select>
+        <button class="btn primary" id="btnCreateJO">Create job order</button>
+      </div>
+      <p class="muted" id="joInfo" style="margin:10px 0 0;font-size:12.5px"></p>
+    </div>
+  </section>
+
+  <section class="paperWrap"><div id="paper"></div></section>
+</main>
+
+<!-- Records -->
+<div class="modal" id="mRecords"><div class="box">
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+    <h2 style="margin:0">Saved records</h2><div class="sp"></div>
+    <button class="btn sm primary" id="btnCsv">Save CSV</button>
+    <button class="btn sm" id="btnExport">Export backup (with photos)</button>
+    <label class="btn sm" style="margin:0">Import backup<input type="file" id="importFile" accept=".json" hidden></label>
+    <button class="btn sm" data-close>Close</button>
+  </div>
+  <div class="grid2" style="margin-bottom:8px">
+    <input id="recSearch" placeholder="Search number or client…">
+    <select id="recFilter"></select>
+  </div>
+  <div id="recList"></div>
+  <div style="display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);flex-wrap:wrap">
+    <span class="muted" style="font-size:12px;flex:1;min-width:200px" id="storeInfo"></span>
+    <button class="btn sm danger" id="btnClearAll">Clear all records…</button>
+  </div>
+</div></div>
+
+<!-- Settings -->
+<div class="modal" id="mSettings"><div class="box">
+  <div style="display:flex;align-items:center;margin-bottom:10px"><h2 style="margin:0">Company settings</h2><div class="sp"></div><button class="btn sm" data-close>Close</button></div>
+  <div class="grid2">
+    <div class="f"><label>Edit company</label><select id="setCo"></select></div>
+    <div class="f" style="justify-content:flex-end"><button class="btn" id="btnAddCo">+ Add another company</button></div>
+    <div class="f"><label>Name in dropdown</label><input data-s="name"></div>
+    <div class="f"><label>Brand name (invoice footer)</label><input data-s="brand"></div>
+    <div class="f full"><label>Tagline</label><input data-s="tagline"></div>
+    <div class="f full"><label>Address</label><input data-s="address"></div>
+    <div class="f"><label>Facebook / Instagram</label><input data-s="social"></div>
+    <div class="f"><label>Email</label><input data-s="email"></div>
+    <div class="f"><label>Viber / phone</label><input data-s="viber"></div>
+    <div class="f"><label>Brand colour <span style="font-size:11px">(added companies only)</span></label><input type="color" data-s="color" style="height:38px;padding:3px"></div>
+    <div class="f full"><label>Payment paragraph (under the totals)</label><textarea data-s="payIntro" rows="3"></textarea></div>
+    <div class="f full"><label>Payment accounts (bank / GCash) — optional</label><textarea data-s="payment" rows="2"></textarea></div>
+    <div class="f full"><label>Terms and conditions (one per line)</label><textarea data-s="terms" rows="7"></textarea></div>
+    <div class="f full"><label>Invoice footer logo</label>
+      <div class="logoPick"><img id="prevLogo"><input type="file" data-logo="logo" accept="image/*" style="width:auto"><button class="btn sm danger" data-logoclear="logo">Remove</button></div></div>
+    <div class="f full"><label>Job order header logo</label>
+      <div class="logoPick"><img id="prevJoLogo"><input type="file" data-logo="joLogo" accept="image/*" style="width:auto"><button class="btn sm danger" data-logoclear="joLogo">Remove</button></div></div>
+  </div>
+  <p class="muted" style="font-size:12px;margin-bottom:0">Settings and records are saved in this browser. Use <b>Export backup</b> in Records to move them to another device.</p>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(async () => {
+  // ---------- helpers ----------
+  const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const today = () => { const d = new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+  const money = n => (Number(n)||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MONL = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+  const ymd = s => { const [y,m,d] = (s||'').split('-').map(Number); return {y,m,d}; };
+  const fmtShort = s => { if(!s) return ''; const {y,m,d} = ymd(s); return `${String(d).padStart(2,'0')}-${MON[m-1]}-${String(y).slice(2)}`; };  // 04-Nov-26
+  const fmtLong  = s => { if(!s) return ''; const {y,m,d} = ymd(s); return `${MONL[m-1]} ${d}, ${y}`; };                                 // OCTOBER 7, 2026
+  const lines = s => String(s||'').split('\n').map(x => x.trim()).filter(Boolean);
+
+  // ---------- storage: IndexedDB (room for photos), falls back to localStorage ----------
+  const LS = { get(k,d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+               set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); return true; }catch(e){ return false; } } };
+  const DB = { db:null,
+    open(){ return new Promise(res => { try{ const r = indexedDB.open('iom', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => { this.db = r.result; res(); }; r.onerror = () => res(); }catch(e){ res(); } }); },
+    get(k){ return new Promise(res => { if(!this.db) return res(undefined); try{ const q = this.db.transaction('kv').objectStore('kv').get(k);
+      q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }catch(e){ res(undefined); } }); },
+    set(k,v){ return new Promise(res => { if(!this.db) return res(LS.set('iom_'+k, v)); try{ const t = this.db.transaction('kv','readwrite');
+      t.objectStore('kv').put(v,k); t.oncomplete = () => res(true); t.onerror = () => res(false); }catch(e){ res(false); } }); }
+  };
+  await DB.open();
+
+  // ---------- company defaults ----------
+  const PAY_INTRO = 'We require 50% of the grand total as down-payment to process your order. To confirm your order, you may send your payments through our following accounts.\nOnce done, kindly send us the receipt or proof of payment. After validating payment, a confirmation message will be sent right after. Thank you!';
+  const TERMS = [
+    'Incase of cancellation done by client, only 20% of the total payment will be refunded (shipping fee excluded).',
+    'Standard lead time is 4-5 weeks or unless stated otherwise. For customized orders, lead time is 30-45 working days excluding weekends.',
+    "Hair-like scratches are normal in mirrors as long as the scratch doesn't extend 1 meter. LED Lights are up to 10,000 hours. We don't replace busted lights.",
+    "We REQUIRE unboxing pictures and videos as proof that you receive the item in it's best condition.",
+    'Best to open the item if the courier / delivery persons are still present.',
+    'Warranty of 1 year for damaged lights / faulty parts ONLY.',
+    'Once items are done and ready for delivery, we can only safe keep for 20 days.',
+    'We can only allow replacement of broken / damaged mirrors provided that the complaint is reported to us within 12 hrs. Beyond that, we can no longer replace.'
+  ].join('\n');
+  const DEFAULTS = {
+    mirrora: {id:'mirrora', name:'MIRRORA.PH', brand:'mirrora.ph', tagline:'mirrors • interiors • furniture', address:'Bulacao, Cebu City, Philippines',
+      social:'Mirrora.PH', email:'mirrora.ph@gmail.com', viber:'+639686505015', color:'#a8875a', payIntro:PAY_INTRO, payment:'', terms:TERMS,
+      logo:'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCACwAKcDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD9U6KKKACikPNFAC0UlUtV1fTtGtHvdSvYbWCMZaSVgoH4mpnOMFeQ0m3ZF3NIWweoriW8eanrTeX4O8Pz3yEcXc4MMH4FuW/AVZtdG8ZX37zW9eigB/5Y2cfA9tx5/SuF47mdqUWzVUrfE7HVNMi/eZR+NM+2QjrKg/4EKw/+EK0yZla7nu5yM/fnPP5VP/whmglAhtjgf9NG/wAaXtcXLVQX3hy011NdbhG5VlI9jUm8Z9qwW8G6VGC1ubiFuoKTGojoWtWvzadr0rd9lwocfnR9YxFNXqQv6ByQezOkpa5ka9rWnHbrOks0Y6z2vzqPqOv6Vsabq9hqkImsrpJV6HaeR7Edq2pY2lUfLs/MmVKUVcu0ZpaT6V1mYZzS0UUAFFFFABRRRQAUUUUAIaQnA60pOB0rzvxV4r1TxFrcvgDwLOovIgDqeoAZSwQ/w57yEdB26msK1ZUl3ZUYORe8R/EDyNSbw14Ws/7V1plzsU/uYPeRh0+nWjTPAUl/Imp+Obz+2b7IcRuMW0J7BI+nHqcmtnwr4R0zwnYLZ6fFukb5pp3OZJn7sx6mte7u7eytZbu6mSGGFDJI7kBVUDJJPYYrnjQdT95X+415+X3aYoSCCMBQiKg4AGABXlnxC/aZ+Efw6lktNV8Qx3V6nBtbP964PoccD86+Vv2k/wBr/W/Ft3deDvhnfyWGkQyGGfUI2xJc44IU/wAKe/U15T8H/gH8RvjBqBn0ayIsC+Z9UusiIHuMnl2+ma8zEZq3L2OEjdnt4bJ4Kn7bGSsj6V1n9vm3kYr4Y8CSuu4Ksl1PjIz/AHQOPzqtbftreNp0Ep8NaOAT93MnHt96u48DfsS+BNCiSXxPqFzrFxwzIP3cWe/HX9a9Itv2dPhDbW4tk8G2m0LtySxJ/HNZ/V81qq7lYqVfKqfuxg2eT6J+2XNL8us+D92CAxtp+PyINeoeEf2iPh54rdbZr59OuGO0R3Q2gn2bpWVrv7K/w61BWfSI7jSpT0ML7l/I/wCNeJ+Pf2f/ABX4Fje8hjOqWOT+9t1JMa56svUD36Vy1K+a5f71Rc0Rwo5Zjfdh7sj7PiltriNZIXR0cZBU5BFYmp+Fba5lN9pztYXo6TwcFv8AeHRh9a+Rvhr8cvEvw3ngtdRebUdFY/vYXJaSEHujH6Zx6V9j+H9f0zxNpFrrWk3Kz2t3GJI3XuCK9TB4zDZvC1rSX3nm43A1sunrqn1Mmy8Q32n3Kab4lgELudsVyn+ql/8AiT7V0yMpAIOQar6hp1pqVs1rdwrJG/BBrmYL678H3cenatMZdNmbZb3TdYyeiOf5GumM6mDly1HePc47KrrHRnYf1paajq4BU5FLXpJpq6MA74paKKYBRTWJA460UAOpDS1S1jVLXRtNudVvZfLt7SJppG9FAzUykoq7Gld2OU+IPiq/s2tvCfhoq+u6sdkWefs8f8UrfQdPetnwZ4S0/wAH6NHplnukckyXE8nMlxMxy0jnuSa5v4ZaPd6jLdfEHX4dupaycwoRk29qPuIPTI5NehY9DXHQg6k/bT+RpOXKuRBXyR+3P8ZJ9A0e3+GOhXLJd6qgmv3jbBS3zwvH94g/gB619ayuIo2c9FGa/MH4rf2j8XPj1q5tpJZm1DU/sNoByFiRvLUj2wua5M5xDo0lCG8tD08lw8atd1J7R1Nn9mL9nU/FrWf7W1cyR+HbBla5wNpuG7Rg/wAzX6L6HoWleHtNg0nRrGG0tLZBHFFEgVVUegFYfww8B6V8O/Bmm+F9LhVEtYV8xgOXkI+Zj9TXWdK2y3AxwtNP7T3Mcyx88ZVdn7q2AUfjS0V6Z5ohqOWCOZWSVQysMEEdqlpOtKUVJWY07ao+ZP2g/guumW83jDwpbKkOc3luB8qf9NFA/Ij3rmv2YPidP4d8Rr4D1icix1M7rQu2fLm/u/jX1xf2VvqNpNZXcSywzoUkRhkMpGCK+Efil4Yu/hp8RpJbWF0FrcJcWkgX5fLzkHPY9q+QzDC/2Zio4qjom9T6XA4n6/hpYWtq0tD71Bz0qtqOnW2p2stpdRh45VKspFVfDGrR694f07WYWVkvLaOYY6fMoOK1K+qXLXp67M+bd6crdjlPD17caJfHwtqk7SbRusp3PMsX90nuy9PpXVK26sLxbosmqaeJbM7b2zYT2z+jjt9COKs+GtXXWtKivMbZMbJU7q44I/OuTDylQqOhLboaVEpx518zWopKWvRMRG6UUGigAJxXnfxLkm8Q63ofw/tGPl38pvtQ2npawkHaf952UfQGvQ34GfSvPPAUba7418VeMHbfGk6aRZ5XG2OFdz4+ruf++a48U3JqkuprT0vLsegW8UcMKRRoFVFCgDsBUlA4pa64qysjJ6mJ4xvjpnhfVb8Hm3tJZB+Ck18Nfsm+Fo9d+MMGpXShjptvJdcjJLnABP5mvtf4moX8A+IFU4J06cD/AL4NfM37G9jHbeM9YYLlhZKuf+B8187mVpY+jB7Hv5dLkwNaS3PsEDHFLSZpa+iR4AUUUUwCiiigBDzXzf8AtYeHVnj0/Wo4CzlWgyozz1Ga+ka8b/aVjkfwvY+Uoz9pwWbgKMda8nOoKWElfoehlk3DExsbf7PN3Ld/CXQjNIztDFJBlhg4SRgv6AV6Rz9a8u/Zv+X4X2MeHGya4X5hg8Stz+PX8a9Srpy9t4aDfY58WrV5LzGuMriuQslOgeMZrL7tpq6maMZ4Ey/eA+o5/CuwNcr8QImg02DXIf8AW6XcJc8DkqD84/75zSx0PdVVbxJpPXl7nUp0p1RW0qzQJMhBVwGBHpUtdkJc0VIyas7CEZopaKoRT1i5Fnpl1dE48qJn/IGud+FVqbfwRp8roVkvPMvJM9S0rs/P4MKu+P52t/B+qypncLZ8Y61d8MQrb6Bp8KjAS0hXHphBXE3zYq3ZGu1P5mnS0UV2mRzfxEQyeCdcQEAtYTgZ/wBw187fsnW/k+LtVIXH+iKCc/7Wa+jfHoz4P1nHX7FN/wCgGvBv2ZLfyfF2qMyYZrVcnHHWvmMxbWZ0T28E7YCqj6YpaKK+nR4gUUUUAFFFFABXkv7RCPN4UggjXLPNj6cc161XlX7Qkcr+E4BCSG+0KCQcEA9a8zOP9zmdeA/3iJb/AGf4hD8N7CNcY8yY4HbMjV6VXnfwHjeP4eWQkA3NJMTg5B+c8ivRK2y7/dYehOM1ry9RKp6xapeabc2jgFZYmUj6irtRzAFDn0NdFePNTkvI54u0kzC8A3r3/hLTZpDmRYBG/wDvL8p/UV0Ncj8OSY9KvLXPFvqV3GB6DzmIrraxwU+ajEuqrTaFooorrMznfiAjSeEdTVRkmA8VqaKQdLtCOf3Ef/oIqHxLbG70O9gHVoWx+VJ4XuBc6BYTg/et48/UKAa89aYz5G29L5moBzmlpPcUV6BiYnjVN/hXVUA5a0lH/jprxj9n2Dy/FGoPjGbVeP8AgX/1q9q8Wgt4c1JAASbWTr0+6a8q+B1q0Gs3bZXH2dRwuMkGvmMy/wCRnRPYwbtgqqPbqKKK+nPHCiiigAooooAQ15j8dYZrnw/bW0ZQCSUhi3Ybeor06vOfjbAs3hqMvgBZcmvMzf8A3SZ14F2xESf4IRCHwDZRqpVVeUKD1wHI/pXoFcL8G9o8EWmwsV3ygbuuPMau561rlv8AusPQjF/xpeotRy/dp9RXMgjjZj2Umuqq7QbMI3bOQ+G+XttZk7NrV7jHtKRXaDpXG/CqNn8LfbmGPt93dXf4PM5H6EV2Qrmy+NqCNKzvNi0UhOKK7LoyIrqMSwNERkMCKwfA0ixaXNpm759PuZYGGMY+bcv/AI6wromGRiuWgA0fxhPEWKxavEJU9PNThvzUr+Vefin7KtCr02Nqa5ouJ1LMVUt6CvLdR+M5sLq8txpqyfZZXiBD8tg4HFepDlfWucufh34Ou5pJ7jQ4GeZy7nn5mJzk8+tGOpYmql9WlYvDTowb9qrnB3nxdfVtNmthpyKZ4mXO/IBI6dOTXNeEPFo8K3j3UVv5wuEClWBUrz39D7V6tqXgrwlp2nz3MehWx+zxtIFIOOBmuV+H58PeLLq4guPDFjB5aK4KAnOfr9K+YxOExf1qHtKi5+h61KvQ9jLkg+XqWF+MNyVJGlxsxOFAl/nT1+LtxvCvpaAEdfM711w8BeEwcjRbcHOeFp3/AAg3hUbf+JNbna24cdDXqrB5p1qI4nWwfSDOVf4rzRj59MUHPH7zrSj4q3JUf8Spdx6jzOldb/whnhr/AKBMHr92l/4Q7w3/ANAmD/vmn9UzP/n4ifa4T+RnIH4rTjONNXj/AG/b6VG/xbukZU/sgFmGQN9dmPB3hsHP9lQf980h8GeGT10mA/hR9UzP/n4g9thf5DlYvijcScf2aufTfWR4w1dvGWmrpciC3yd24HNehr4R8PIBt0uHjvisrxJYaZpFrHPbaVbOWbaQwxx+Fc+KwuNVJ+2qLlNKVagppwjqc94Q1abwto0ekwxfaViYkyH5eWOen410EXjW4ZRmyXcT90P2q7oNjpWqWCXT6bChbIKheMg1o/2BpIbcLJAfUcV04XC4tU48k9DKrVpOb5o6l2GQyxRyEY3KDj8KwfH2sroPhPU9T/jjt3EY9XIwo/M1v7FjQKowF4H0rg/H5/t/XtA8HR5ZJrkXt4PSGL5sH6sFH416uJm4UeV7vQ5KaTmdP4Q0z+xvDOmaYRhra1jjb/eCjP61sUyIYUU+uijD2cFEmTu2yOQ8UUkp60VvFKxhO99CWsDxbYS3Nml7aqftNg4uIsd8feX8Rmt+mOu/IIGCK5cTRVem4M3hJwlcq6VqMGo2MN3A4KyKDx2PcVdrlbZj4a1lrJ+LC+ctCe0ch6r7Z7V1AbPI6Vlg6znDkl8S3Kqx5XdbMz/EH/IHvf8Ari/8q8n+BZkOs6mMHYIoiAcgr14wa9a12Jp9JvIU+88LKPqQa8z+DOh6npGo3rXwyHhjAbcCcjOegrycem8xotHfhpJYSomet0tFFfRHmCfhS0UUAFFFFACGub8bLusoSccSV0tcb8SdasdD0qK5vy2wyYG1cnNedmmmGk2dGFTlVSRs+FB/xKIuO57e9bFc54A1iz13w5BqFiXMLs4UsMHhiK6LIHatsC19Xi12Irpqo7kV7dQ2drLdXMixxQoXdmPAUckmuG+HMT+INQ1Lx/cof+Ji3kWIP8Nsh4P/AAI8/hVfx5qN34q1i3+G2iuds+2bWJ1/5Y22ciPPZnx+Wa7/AE+wt9NtIbG1iWOGBBGiqMAAdKy/3mtf7MfzD+HDzZYGKWkGO1FegZCMyKfmIoqOfPGOaKai3qJzjHSRNSUtFIZR1bSrXVbKS0uVOG5BHBU9iPesfQdXubS7Ph7WSRdQqDDKR8twnqD0yO4rpTjvWZruiWusWojlykkbb4pU4aNuxBrgxNCSl7aj8S/E1hJW5JbFm/O60m/3D/Kua8GIUu5+DjaBn86lsdcutNnGj+JFCkjbFdY+SUe/oa6G1tLKA+ZbQxoW6lQBmudRji60Kq0cd0a39lBwfUtUUnGaWvXOUKKKKACiiigAryz4+xSS+GbdI5NhM/3vTivUiR3qjquj6TrNuLfVbKG5jU7gsihhn8a4sfQeJoSpJ2ub4ar7Gqqj6HH/AATGzwDYqBjDSj/x81f8deM5NDWHRtFtvtuu6jlLS2Q/d/6aP/dQdSazdY8XWmhSJ4O8AaZFe6q2cQxDEFqCeXkI4HrjvWp4M8FDQTLq2r3LX+tXvNzduOf9xP7qj0FclBT9lHD03e2jZdWSlUdV9SbwL4Oj8K6e7XM5u9Uvn+0X92w+aaUjt6KOgHoK6ikA6cdKWvTpU1Sjyo55ScndiCloorUkayBjkk0UjttooS7CsmPooooGFFFFAFW/0601GBra8gWWNxghhXN/2T4g8OfvNGlN/Zjn7LO2HQf7D9/ofzrraCM8YrkrYOFR8y0l3NIVXHToc/p/jPSLmX7Leu9hddDDdL5bZ9ieD+BreWWNxuVgR14qnf6Pp2qR+VfWcUy+jqDWM3glLUltG1a8sOOFSQsn/fJ4rFSxVHRrmX4lWpy8jpty0u5fWuV/s3xxbMBDrtpcIP8AntBgn/vmo2HxFU4DaS3uQ4/rT+vSW9NgqSe0kdaXUd6QyoM5OMetcj/Z/wARLpSr6zp1rnvFAWP/AI9TZPh9cakc6/4m1G8RvvQrJ5UZ+oWj61Wl8FN/MPZxW8iz4g+IvhTQJPs0+oi4vCPltLRTPOx9AiZI/HFc9GvxD8fblnt28K6O54G8PezL9B8sf5k11+ieD/D3h1CulaVbwE9XVBub6nqa2goA4GKUaFatrWdl2Qc8YfCZHhvwto/he0+yaVZiIMd0kjHdJK395mPJNbGPaloruhTjTXLFGTbk7sSlooqxBRRRQA1lDHmilIzRRcNhaKKKACiiigAooooASilooAQjIpNvvTqKLAJjjFLRRQAUUUUAJS0UUAFFFFABRRRQAUUUUAf/2Q==', joLogo:'data:image/jpeg;base64,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Dy5epNdPBf6fdOY7a9t5XC5KxyqxA/A1W1zw9oviWxGn67p0V7brIsojkzgMM4I/AmqeheBvCXhm6a90DQrayndPLZ4t2dvXHJ9hVWmptpaeoNxcbdTK0/j4t61g5/4kWn/gfOuqr+JbvWbP4jaS+h6UuozHRb1WiacRAL59t82W684/OuwTTbKO/k1RLVBdzRJA83O5o0LFVPsCzH8ac9jZvfJqbW6fao4ngWX+IRsVLL9CUU/hUunJxte2o+f3r+Rz+g6f4ju/EEniXxDa2lkVs/scFrA/mOo8zczO44PAXA6Dn1rN1u71yz+I6NoeipqLtooDq1wsWweeeQW613VV/sFp9tOpfZ0+1GIQGXHJjzu2/TNN0ny2T+YlOzvY57w3o+tyeIL7xf4hgt7W6u7OCyS1gk3hI42dtzt/E2XP0AqrZf8AJYNVH/UuWPb/AKebmuz+tVl06xXUpNWW2QXkkKW7zc7jGrMwX6Asx/Gj2VrW73Ep7+hx3i7QrHxH4403Sb8N5cuh6htkQ4eJxNa7XU9mBwQap6RrOoy+M9H8MeISf7V0tLndNtwl5AYwEnX6nIYdmB9RXfvY2j3sepPbobqGN4Ul/iVGKll+hKL+VJLY2U13Dfy20bXNuGWKUj5kDfeAPocDj2FL2T5uZdylUVrM4P4yC4Nt4TFnexWk3/CT2myeVQVjbypsEgnkCt7wwdbjuZk1jxdp2qhk/dR20SxsrDqTgnPFamu+HND8T2aaf4g02K+t45RMkcuSA4BG7jvgn86oaN4A8GeHb4alovh+1tLpVKCWPdkA9RyaTpy9pzr8wU1ycr/IreJLCGTXINR03xJDpWsQ2rRAShWWaBpAcFSecMpwR3Jqbwf4hvtXutW07Ufssk2lXCRfaLVy0UyugcYPYgHBHrWjrfhrQfEcQh1zSbe9VcbfMX5l78MOQKsaXpWmaNapYaVYw2lumMRxIFHTHPqcAcn0qlCSndaC5o8upa9j2oopa2MwooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigl7hRRkijNBQUUUUAFFFFABRRRQAUelFFABRRRQAUUUUAFFFFABRRRQAUUUUAJQM45paM0AFIO+aWjNABSEUuaM0AFHejJJ60HrQAnOetKM5FFL1FACUgBzS0UAFGPaijJoAKTHOaWigBB70o4OaKKAEFLQaMmgAooooAMUUZooAKKM8YooAKKKKACiijNABRRRQAUGiigA7daKOcUZPrQAUUUUEvcKKB/WigoKKKKACiiigAooooAKPSiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACijqaKAClH9aSgf1oAKKKKACiiigAooooAKB1oooAD1ooooAKKKKACiiigAooooAKKKKACiiigAooooAPWg0f1oNAB+FFFFABRRRQS9wzijOaQctiloKCiiigAooooAKKKKACiij0oAKKSloAKKKKACiiigAooooAKKKKACiiigAooooAKKKKADPNFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUhoAWikHSigT3P/9k='},
+    cebumirrors: {id:'cebumirrors', name:'CEBU MIRRORS', brand:'cebu mirrors', tagline:'mirrors • interiors • furniture', address:'Cebu City, Philippines',
+      social:'', email:'', viber:'', color:'#f26b0f', payIntro:PAY_INTRO, payment:'', terms:TERMS, logo:'', joLogo:''}
+  };
+  const OLD_TERMS = '50% downpayment required to start the job. Balance due upon completion/installation.';
+  const THEMES = {
+    mirrora:     {ui:'#1a1a1a', uiSoft:'#f4ecd8', uiInk:'#d8b876', box:'#e8e3d3', boxInk:'#111', logoBorder:'#f6dccd', logoBg:'#fbf9f7', logoInk:'#a8875a'},
+    cebumirrors: {ui:'#f26b0f', uiSoft:'#fff4d6', uiInk:'#fff',    box:'#ffc21a', boxInk:'#111', logoBorder:'#f26b0f', logoBg:'#111',    logoInk:'#ffc21a'}
+  };
+  const themeFor = c => THEMES[c.id] || {ui:c.color||'#334155', uiSoft:'#eef2f7', uiInk:'#fff', box:'#e9edf2', boxInk:'#111', logoBorder:c.color||'#334155', logoBg:'#fff', logoInk:c.color||'#334155'};
+  function applyTheme(c){
+    const t = themeFor(c), r = document.documentElement.style, p = $('#paper').style;
+    r.setProperty('--accent', t.ui); r.setProperty('--accent-soft', t.uiSoft); r.setProperty('--accent-ink', t.uiInk);
+    p.setProperty('--box', t.box); p.setProperty('--box-ink', t.boxInk);
+    p.setProperty('--logo-border', t.logoBorder); p.setProperty('--logo-bg', t.logoBg); p.setProperty('--logo-ink', t.logoInk);
+  }
+
+  // ---------- input checks (stored data and imported backups are treated as untrusted) ----------
+  const SAFE_IMG = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+\/=]+$/;
+  const safeImg = v => (typeof v === 'string' && SAFE_IMG.test(v)) ? v : '';
+  const safeId = v => (typeof v === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(v)) ? v : uid();
+  const str = (v, max = 5000) => v == null ? '' : String(v).slice(0, max);
+  const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const safeDate = v => /^\d{4}-\d{2}-\d{2}$/.test(str(v)) ? v : '';
+  function cleanCompany(c){
+    if(!c || typeof c !== 'object') return null;
+    const o = { id: safeId(c.id) };
+    ['name','brand','tagline','address','social','email','viber','payIntro','payment','terms'].forEach(k => o[k] = str(c[k]));
+    o.color = /^#[0-9a-f]{6}$/i.test(c.color) ? c.color : '#334155';
+    o.logo = safeImg(c.logo); o.joLogo = safeImg(c.joLogo);
+    return o;
+  }
+  function cleanRecord(r){
+    if(!r || typeof r !== 'object' || (r.type !== 'INV' && r.type !== 'JO')) return null;
+    const o = { type: r.type, id: safeId(r.id), companyId: str(r.companyId, 64), number: str(r.number, 40) };
+    ['payStatus','custName','custPhone','custAddress','joNote','savedAt'].forEach(k => o[k] = str(r[k]));
+    o.date = safeDate(r.date); o.joDate = safeDate(r.joDate);
+    o.deadline = safeDate(r.deadline ?? r.targetDate ?? r.installDate);
+    o.deliveryFee = num(r.deliveryFee); o.installFee = num(r.installFee ?? r.fee); o.paid = num(r.paid); o.discount = num(r.discount);
+    o.vat = !!r.vat;
+    if(r.type === 'JO') o.invoiceId = str(r.invoiceId, 64);
+    o.orderId = str(r.orderId, 64); o.orderNo = str(r.orderNo, 40);
+    o.items = (Array.isArray(r.items) ? r.items : []).slice(0, 200).map(i => ({
+      name: str(i?.name ?? i?.desc), dims: str(i?.dims ?? i?.size), details: str(i?.details),
+      qty: num(i?.qty ?? 1), price: num(i?.price), photo: safeImg(i?.photo) }));
+    return o;
+  }
+
+  // ---------- load + migrate ----------
+  let companies = (await DB.get('companies')) || LS.get('iom_companies', null) || Object.values(DEFAULTS);
+  companies = (Array.isArray(companies) ? companies : []).map(c => {
+    if(!c || typeof c !== 'object') return null;
+    const d = DEFAULTS[c.id] || {brand:str(c.name).toLowerCase(), tagline:'', address:'', social:'', email:'', viber:str(c.phone), payIntro:'', payment:'', terms:'', logo:'', joLogo:''};
+    const out = {...d, ...c};
+    Object.keys(d).forEach(k => { if(out[k] === '' || out[k] == null || (k==='terms' && out[k]===OLD_TERMS)) out[k] = d[k]; });
+    return cleanCompany(out);
+  }).filter(Boolean);
+  Object.values(DEFAULTS).forEach(d => { if(!companies.some(c => c.id===d.id)) companies.push(clone(d)); });
+
+  let records = (await DB.get('records')) || LS.get('iom_records', []);
+  records = (Array.isArray(records) ? records : []).map(cleanRecord).filter(Boolean);
+
+  // Counters: the last number used per series & year, e.g. {INV:{2026:190}, JO:{2026:128}}
+  let seq = (await DB.get('seq')) || LS.get('iom_seq', {});
+  if(!seq.INV){ seq = {INV: Object.assign({}, seq), JO:{}}; }   // migrate older format
+  const saveSeq = () => { DB.set('seq', seq); LS.set('iom_seq', seq); };
+  const parseNo = (prefix, n) => { const m = String(n||'').trim().match(new RegExp('^' + prefix + '-(\\d{4})-(\\d+)$', 'i')); return m ? {y:m[1], n:+m[2]} : null; };
+  // Record a saved number so the next one always continues from it.
+  // If the latest number is corrected (e.g. typo 1900 -> 0190), the counter follows the correction.
+  function noteNumber(prefix, oldNo, newNo){
+    const s = seq[prefix], od = parseNo(prefix, oldNo), nw = parseNo(prefix, newNo);
+    if(od && od.n === Number(s[od.y]) && oldNo !== newNo) s[od.y] = 0;
+    if(nw) s[nw.y] = Math.max(Number(s[nw.y])||0, nw.n);
+    saveSeq();
+  }
+  function nextNumber(prefix, year){
+    let max = Number(seq[prefix][year]) || 0;
+    records.filter(r => r.type===prefix).forEach(r => { const p = parseNo(prefix, r.number); if(p && p.y===year) max = Math.max(max, p.n); });
+    return `${prefix}-${year}-${String(max+1).padStart(4,'0')}`;
+  }
+  const saveCompanies = () => DB.set('companies', companies);
+  async function linkOrder(orderId, patch){
+    if(!orderId) return;
+    const q = (await DB.get('links')) || [];
+    const cur = q.find(x => x.orderId===orderId);
+    if(cur) Object.assign(cur.patch, patch); else q.push({orderId, patch});
+    await DB.set('links', q);
+  }
+  const saveRecords = () => DB.set('records', records);
+
+  let mode = 'INV', inv, joInvoiceId = '', dirty = false, photoTarget = -1;
+  const companyOf = id => companies.find(c => c.id===id) || companies[0];
+  const invoices = () => records.filter(r => r.type==='INV');
+  const joFor = id => records.find(r => r.type==='JO' && r.invoiceId===id);
+
+  // ---------- numbering: INV-2026-0001 ----------
+  const nextInvoiceNumber = dateStr => nextNumber('INV', (dateStr || today()).slice(0,4));
+  const nextJONumber = () => nextNumber('JO', today().slice(0,4));
+  const blankItem = () => ({name:'', dims:'', details:'', qty:1, price:0, photo:''});
+  function blankInvoice(companyId){
+    const d = today();
+    return { id:uid(), type:'INV', companyId: companyOf(companyId).id, number: nextInvoiceNumber(d), date:d, payStatus:'Unpaid',
+      custName:'', custPhone:'', custAddress:'', items:[blankItem()],
+      deliveryFee:0, installFee:0, paid:0, discount:0, vat:false, deadline:'', joNote:'', savedAt:null };
+  }
+  function buildJO(i, existing){
+    const jo = clone(i);
+    Object.assign(jo, { type:'JO', id: existing ? existing.id : uid(), invoiceId: i.id,
+      number: existing ? existing.number : nextJONumber(), joDate: existing ? existing.joDate : today(), savedAt: new Date().toISOString() });
+    return jo;
+  }
+  function totals(d){
+    const sub = d.items.reduce((s,i) => s + (Number(i.qty)||0)*(Number(i.price)||0), 0);
+    const del = Number(d.deliveryFee)||0, ins = Number(d.installFee)||0, disc = Number(d.discount)||0, paid = Number(d.paid)||0;
+    const beforeVat = Math.max(0, sub + del + ins - disc), vat = d.vat ? beforeVat*0.12 : 0;
+    const gross = beforeVat + vat;
+    return {sub, del, ins, disc, vat, paid, gross, grand: gross - paid};
+  }
+
+  // ---------- selects ----------
+  function renderCompanySelects(){
+    const o = companies.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+    $('#companySel').innerHTML = o; $('#setCo').innerHTML = o; $('#recFilter').innerHTML = '<option value="">All companies</option>' + o;
+  }
+  function renderJoInvoiceSelect(){
+    const list = invoices();
+    if(!list.length){ $('#joInvSel').innerHTML = '<option value="">— no invoices yet —</option>'; joInvoiceId=''; return; }
+    if(!list.some(r => r.id===joInvoiceId)) joInvoiceId = list[0].id;
+    $('#joInvSel').innerHTML = list.map(r => `<option value="${esc(r.id)}">${esc(r.number)} — ${esc(r.custName)} (${esc(companyOf(r.companyId).name)})${joFor(r.id)?' ✓':''}</option>`).join('');
+    $('#joInvSel').value = joInvoiceId;
+  }
+  function setMode(m){
+    mode = m;
+    document.body.classList.toggle('mode-inv', m==='INV'); document.body.classList.toggle('mode-jo', m==='JO');
+    $$('#typeSeg button').forEach(b => b.classList.toggle('on', b.dataset.type===m));
+    $('#companySel').disabled = m==='JO';
+    if(m==='JO') renderJoInvoiceSelect();
+    refresh();
+  }
+
+  // ---------- invoice form ----------
+  function fillForm(){
+    $$('[data-k]').forEach(el => { const v = inv[el.dataset.k]; if(el.type==='checkbox') el.checked = !!v; else el.value = v ?? ''; });
+    renderItems(); refresh();
+  }
+  function renderItems(){
+    $('#items').innerHTML = inv.items.map((it,i) => `
+      <div class="item" data-i="${i}">
+        <div class="ttl">Item ${i+1}</div>
+        <button class="btn sm danger x" data-del="${i}" title="Remove item">✕</button>
+        <div class="f full"><label>Item name</label><input data-ik="name" value="${esc(it.name)}"></div>
+        <div class="f full"><label>Dimensions</label><input data-ik="dims" value="${esc(it.dims)}"></div>
+        <div class="f full"><label>Details (one per line)</label><textarea data-ik="details" rows="3">${esc(it.details)}</textarea></div>
+        <div class="f"><label>Qty</label><input type="number" min="0" step="any" data-ik="qty" value="${esc(it.qty)}"></div>
+        <div class="f"><label>Unit price (Php)</label><input type="number" min="0" step="0.01" data-ik="price" value="${esc(it.price)}"></div>
+        <div class="photoRow">
+          ${it.photo ? `<img src="${esc(safeImg(it.photo))}" alt="">` : '<div class="ph0">No photo</div>'}
+          <button class="btn sm" data-photo="${i}">${it.photo ? 'Change photo' : '📷 Add photo'}</button>
+          ${it.photo ? `<button class="btn sm danger" data-unphoto="${i}">Remove</button>` : ''}
+          <div class="sp"></div><div class="amt">Php ${money((Number(it.qty)||0)*(Number(it.price)||0))}</div>
+        </div>
+      </div>`).join('');
+  }
+  function renderBanner(){
+    const b = $('#invBanner');
+    $('#btnSave').textContent = inv.savedAt ? 'Update invoice' : 'Create invoice';
+    if(!inv.savedAt){ b.style.display='none'; return; }
+    const jo = joFor(inv.id); b.style.display='flex';
+    const ord = inv.orderNo ? ` <span class="tag ord">Order ${esc(inv.orderNo)}</span>` : '';
+    b.innerHTML = jo ? `<span>Invoice <b>${esc(inv.number)}</b>${ord} · Job order <b>${esc(jo.number)}</b> updates with this invoice.</span><button class="btn sm" id="goJO">View job order</button>`
+                     : `<span>Invoice <b>${esc(inv.number)}</b>${ord} created.</span><button class="btn sm primary" id="goJO">Create job order →</button>`;
+    $('#goJO').onclick = () => { joInvoiceId = inv.id; setMode('JO'); };
+  }
+
+  // ---------- job order panel ----------
+  function renderJoPanel(){
+    const i = records.find(r => r.id===joInvoiceId), jo = i && joFor(i.id), btn = $('#btnCreateJO');
+    if(!i){ btn.disabled = true; btn.textContent = 'Create job order'; $('#joInfo').textContent = 'Create an invoice first — then pick it here.'; return null; }
+    btn.disabled = !!jo; btn.textContent = jo ? `Created: ${jo.number}` : 'Create job order';
+    $('#joInfo').innerHTML = jo
+      ? `Job order <b>${esc(jo.number)}</b> was created ${fmtLong(jo.joDate).toLowerCase()}. Changes to the invoice update it automatically. <a href="#" id="editInv">Edit invoice</a>
+         <div class="joq-row" style="margin-top:10px"><label for="joNoEdit" style="font-size:12px;color:var(--muted)">JO no.</label>
+         <input id="joNoEdit" value="${esc(jo.number)}" style="flex:1;min-width:150px"><button class="btn sm" id="btnJoNo">Save JO no.</button></div>`
+      : `Everything from <b>${esc(i.number)}</b> (client, items, photos, deadline, note) will be copied. Preview on the right.`;
+    const ei = $('#editInv'); if(ei) ei.onclick = e => { e.preventDefault(); inv = clone(i); dirty=false; setMode('INV'); fillForm(); };
+    const bj = $('#btnJoNo'); if(bj) bj.onclick = async () => {
+      const v = $('#joNoEdit').value.trim();
+      if(!v){ toast('JO number is empty'); return; }
+      if(v === jo.number){ toast('No change'); return; }
+      if(records.some(r => r.type==='JO' && r.number===v && r.id!==jo.id)){ toast(`${v} is already used`); return; }
+      const old = jo.number; jo.number = v; await saveRecords(); noteNumber('JO', old, v); await linkOrder(i.orderId, {job_order_no: v});
+      renderJoInvoiceSelect(); refresh(); toast(`Job order number changed to ${v} — next will be ${nextJONumber()}`);
+    };
+    const je = $('#joNoEdit'); if(je) je.onkeydown = e => { if(e.key==='Enter') $('#btnJoNo').click(); };
+    return jo || buildJO(i);
+  }
+
+  function refresh(){
+    if(mode==='INV'){ $('#companySel').value = inv.companyId; renderBanner(); renderPaper(inv); }
+    else { const d = renderJoPanel();
+      if(d){ $('#companySel').value = d.companyId; renderPaper(d); }
+      else { applyTheme(companyOf($('#companySel').value)); $('#paper').innerHTML = '<p class="muted" style="text-align:center;padding-top:140px">No invoice selected.</p>'; } }
+  }
+
+  // ---------- icons for invoice footer ----------
+  const IC = {
+    fb: '<svg width="12" height="12" viewBox="0 0 12 12"><rect width="12" height="12" rx="2" fill="#1877f2"/><text x="6.6" y="10.2" font-size="10" font-weight="700" fill="#fff" text-anchor="middle" font-family="Arial">f</text></svg>',
+    ig: '<svg width="12" height="12" viewBox="0 0 12 12"><defs><linearGradient id="g" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#f9a23b"/><stop offset=".5" stop-color="#e1306c"/><stop offset="1" stop-color="#833ab4"/></linearGradient></defs><rect width="12" height="12" rx="3" fill="url(#g)"/><rect x="2.5" y="2.5" width="7" height="7" rx="2" fill="none" stroke="#fff" stroke-width="1.1"/><circle cx="6" cy="6" r="1.7" fill="none" stroke="#fff" stroke-width="1.1"/></svg>',
+    mail: '<svg width="13" height="10" viewBox="0 0 13 10"><path d="M1 9V1.5L6.5 5.5 12 1.5V9" fill="none" stroke="#ea4335" stroke-width="2" stroke-linejoin="round"/></svg>',
+    viber: '<svg width="26" height="10" viewBox="0 0 26 10"><rect width="26" height="10" rx="5" fill="#7360f2"/><text x="13" y="7.6" font-size="6.6" font-weight="700" fill="#fff" text-anchor="middle" font-family="Arial">Viber</text></svg>'
+  };
+
+  // ---------- paper ----------
+  function renderPaper(d){
+    const c = companyOf(d.companyId); applyTheme(c);
+    $('#paper').innerHTML = d.type==='INV' ? invoiceHTML(d, c) : joHTML(d, c);
+  }
+
+  function invoiceHTML(d, c){
+    const t = totals(d);
+    const items = d.items.filter(i => i.name || i.dims || i.details || Number(i.price) || i.photo);
+    const rows = items.map((i,n) => `
+      <tr>
+        <td class="ph">${i.photo ? `<img src="${esc(safeImg(i.photo))}" alt="">` : ''}</td>
+        <td class="desc">Item ${n+1}
+          ${i.name ? `<b>${esc(i.name.toUpperCase())}</b>` : ''}
+          ${i.dims ? `<b>Dimensions: ${esc(i.dims)}</b>` : ''}
+          ${lines(i.details).map(l => `<i>${esc(l)}</i>`).join('')}</td>
+        <td class="c num">${esc(i.qty)}</td>
+        <td class="cur num">Php</td><td class="r num">${money(i.price)}</td>
+        <td class="cur num" style="padding-left:40px">Php</td><td class="r num">${money((Number(i.qty)||0)*(Number(i.price)||0))}</td>
+      </tr>`).join('') || `<tr><td></td><td colspan="6" style="color:#aaa">Add items in the form.</td></tr>`;
+    const fee = (label, v, neg) => `<tr class="fee"><td>${label}</td><td></td><td>${v ? (neg?'- ':'') + money(v) : '-'}</td></tr>`;
+    const termLines = lines(c.terms);
+    const contact = [
+      c.social ? `<div class="ln">${IC.fb}${IC.ig}<span>${esc(c.social)}</span></div>` : '',
+      c.email ? `<div class="ln">${IC.mail}<span>${esc(c.email)}</span></div>` : '',
+      c.viber ? `<div class="ln">${IC.viber}<span>${esc(c.viber)}</span></div>` : ''].join('');
+    return `<div class="iv">
+      <div class="iv-no">INVOICE #: ${esc(d.number)}</div>
+      <table class="iv-meta">
+        <tr><td>DATE:</td><td><b>${fmtShort(d.date)}</b></td></tr>
+        <tr><td>INVOICE FOR:</td><td><b>${esc(d.custName.toUpperCase()) || '&nbsp;'}</b>${d.custAddress ? `<b>${esc(d.custAddress)}</b>` : ''}<b>${esc(d.custPhone)}</b></td></tr>
+      </table>
+      <table class="iv-items">
+        <thead><tr><th class="ph"></th><th>ITEMS</th><th class="c" style="width:60px">QTY</th><th class="c" colspan="2" style="width:170px">UNIT PRICE</th><th class="c" colspan="2" style="width:190px">TOTAL</th></tr></thead>
+        <tbody>${rows}<tr class="spacer"><td colspan="7"></td></tr></tbody>
+      </table>
+      <table class="iv-tot">
+        <tr class="sub"><td>TOTAL</td><td>Php</td><td>${money(t.sub)}</td></tr>
+        <tr class="gap"><td colspan="3"></td></tr>
+        ${fee('Delivery Fee', t.del)}
+        ${fee('Installation Fee', t.ins)}
+        ${t.disc ? fee('Discount', t.disc, true) : ''}
+        ${d.vat ? fee('VAT (12%)', t.vat) : ''}
+        ${fee('Downpayment', t.paid, true)}
+        <tr class="gap"><td colspan="3"></td></tr>
+        <tr class="grand"><td>GRAND TOTAL</td><td>PHP</td><td>${money(t.grand)}</td></tr>
+      </table>
+      <hr class="iv-rule">
+      ${c.payIntro ? `<p class="iv-pay">${esc(c.payIntro)}</p>` : ''}
+      ${c.payment ? `<p class="iv-acct">${esc(c.payment)}</p>` : ''}
+      ${termLines.length ? `<div class="iv-th">TERMS AND CONDITIONS</div><div class="iv-terms">${termLines.map((l,k) => `<div${k===termLines.length-1 && termLines.length>3 ? ' class="l"' : ''}>${esc(l)}</div>`).join('')}</div>` : ''}
+      <div class="iv-foot">
+        ${c.logo ? `<img class="logo" src="${esc(safeImg(c.logo))}" alt="">` : ''}
+        <div><div class="brand">${esc(c.brand || c.name)}</div>${c.tagline ? `<div class="tg">${esc(c.tagline)}</div>` : '<div style="height:8px"></div>'}
+          ${c.address ? `<div class="addr">${esc(c.address)}</div>` : ''}${contact}</div>
+      </div>
+    </div>`;
+  }
+
+  function joHTML(d, c){
+    const invNo = records.find(r => r.id===d.invoiceId)?.number || '';
+    const items = d.items.filter(i => i.name || i.dims || i.details || i.photo);
+    const multi = items.length > 1;
+    const qtyText = q => { q = Number(q)||0; return q===1 ? '1 PC ONLY' : `${q} PCS`; };
+    const blocks = items.map((i,n) => {
+      const det = [i.name, ...lines(i.details)].filter(Boolean).join(' + ');
+      return `<div class="jo-item">
+        ${multi ? `<div class="itemno">ITEM ${n+1}</div>` : ''}
+        <div class="jo-row"><span class="k">DETAILS:</span><span>${esc(det)}</span></div>
+        <div><span class="k">DIMENSIONS:</span> <b>${esc(i.dims)}</b></div>
+        <div>QUANTITY: <span class="jo-qty">${qtyText(i.qty)}</span></div>
+        ${i.photo ? `<img class="jo-photo" src="${esc(safeImg(i.photo))}" alt="">` : ''}
+      </div>`; }).join('');
+    const note = lines(d.joNote).map(l => l.startsWith('*') ? l : '*' + l).join('\n');
+    return `<div class="jo">
+      <div class="jo-logo">${c.joLogo ? `<img src="${esc(safeImg(c.joLogo))}" alt="">` : `<div class="txt">${esc(c.name)}</div>`}</div>
+      <table class="jo-tbl">
+        <tr><td>JOB ORDER NO:</td><td>${esc(d.number)}</td><td>DATE:</td><td>${fmtLong(d.joDate)}</td></tr>
+        <tr><td>CLIENT'S NAME</td><td>${esc(d.custName)}</td><td>DEADLINE:</td><td class="red">${fmtLong(d.deadline)}</td></tr>
+        <tr><td>ADDRESS</td><td>${esc(d.custAddress)}</td><td></td><td></td></tr>
+        <tr><td>CONTACT NUMBER</td><td>${esc(d.custPhone)}</td><td>INVOICE NO:</td><td>${esc(invNo)}</td></tr>
+      </table>
+      ${blocks}
+      ${note ? `<div class="jo-note">NOTE:\n${esc(note)}</div>` : ''}
+    </div>`;
+  }
+
+  // ---------- form events ----------
+  document.addEventListener('input', e => {
+    const k = e.target.dataset.k, ik = e.target.dataset.ik;
+    if(k && mode==='INV'){
+      inv[k] = e.target.type==='checkbox' ? e.target.checked : e.target.value; dirty = true;
+      if(k==='date' && !inv.savedAt){ inv.number = nextInvoiceNumber(inv.date); $('[data-k=number]').value = inv.number; }
+      renderPaper(inv);
+    } else if(ik){
+      const box = e.target.closest('.item'), i = +box.dataset.i;
+      inv.items[i][ik] = e.target.value; dirty = true;
+      box.querySelector('.amt').textContent = 'Php ' + money((Number(inv.items[i].qty)||0)*(Number(inv.items[i].price)||0));
+      renderPaper(inv);
+    }
+  });
+  $('#items').addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b) return;
+    if(b.dataset.del !== undefined){ inv.items.splice(+b.dataset.del,1); if(!inv.items.length) inv.items.push(blankItem()); }
+    else if(b.dataset.photo !== undefined){ photoTarget = +b.dataset.photo; $('#photoFile').click(); return; }
+    else if(b.dataset.unphoto !== undefined){ inv.items[+b.dataset.unphoto].photo = ''; }
+    else return;
+    dirty = true; renderItems(); renderPaper(inv);
+  });
+  function readImage(file, maxSide, type, q){
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => { const img = new Image(); img.onload = () => {
+        const s = Math.min(1, maxSide/Math.max(img.width, img.height)), cv = document.createElement('canvas');
+        cv.width = Math.round(img.width*s); cv.height = Math.round(img.height*s);
+        const ctx = cv.getContext('2d'); if(type==='image/jpeg'){ ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height); }
+        ctx.drawImage(img,0,0,cv.width,cv.height); res(cv.toDataURL(type, q));
+      }; img.onerror = rej; img.src = r.result; };
+      r.onerror = rej; r.readAsDataURL(file);
+    });
+  }
+  $('#photoFile').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if(!f || photoTarget<0) return;
+    try{ inv.items[photoTarget].photo = await readImage(f, 1400, 'image/jpeg', .82); dirty = true; renderItems(); renderPaper(inv); }
+    catch(err){ toast("Couldn't read that image"); }
+  };
+  $('#btnAddItem').onclick = () => { inv.items.push(blankItem()); renderItems(); renderPaper(inv);
+    const last = $$('#items .item').pop(); last && last.querySelector('input').focus(); };
+  $('#companySel').onchange = e => { inv.companyId = e.target.value; dirty = true; refresh(); };
+  $('#typeSeg').onclick = e => { const t = e.target.dataset.type; if(t && t!==mode){ if(t==='JO' && inv.savedAt) joInvoiceId = inv.id; setMode(t); } };
+
+  // ---------- create / update invoice ----------
+  async function saveInvoice(){
+    if(!inv.custName.trim()){ toast("Add the client's name first"); $('[data-k=custName]').focus(); return; }
+    if(!inv.number.trim()){ toast('Invoice number is empty'); return; }
+    if(invoices().some(r => r.number===inv.number && r.id!==inv.id)){ toast(`${inv.number} is already used — change the number`); return; }
+    inv.number = inv.number.trim();
+    const isNew = !inv.savedAt; inv.savedAt = new Date().toISOString();
+    const i = records.findIndex(r => r.id===inv.id), oldNumber = i>=0 ? records[i].number : null;
+    if(i>=0) records[i] = clone(inv); else records.unshift(clone(inv));
+    let jo = joFor(inv.id);
+    if(jo){ const updated = buildJO(inv, jo); records[records.indexOf(jo)] = updated; jo = updated; }
+    const ok = await saveRecords(); if(ok) noteNumber('INV', oldNumber, inv.number); dirty = false; renderBanner();
+    if(ok && inv.orderId) await linkOrder(inv.orderId, Object.assign({invoice_no: inv.number}, jo ? {job_order_no: jo.number} : {}));
+    toast(!ok ? "Couldn't save — browser storage is full or blocked"
+       : isNew ? `Invoice ${inv.number} created — next will be ${nextInvoiceNumber(inv.date)}` : jo ? `Updated ${inv.number} and ${jo.number}` : `Updated ${inv.number}`);
+  }
+  $('#btnSave').onclick = saveInvoice;
+  document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey) && e.key==='s'){ e.preventDefault(); if(mode==='INV') saveInvoice(); } });
+  const confirmLite = m => { try{ return window.confirm(m); }catch(e){ return true; } };
+  $('#btnNew').onclick = () => { if(dirty && !confirmLite('Discard unsaved changes?')) return; inv = blankInvoice(inv.companyId); dirty=false; fillForm(); };
+
+  // ---------- create job order ----------
+  $('#joInvSel').onchange = e => { joInvoiceId = e.target.value; refresh(); };
+  $('#btnCreateJO').onclick = async () => {
+    const i = records.find(r => r.id===joInvoiceId); if(!i || joFor(i.id)) return;
+    const jo = buildJO(i); records.unshift(jo); await saveRecords(); noteNumber('JO', null, jo.number);
+    await linkOrder(i.orderId, {job_order_no: jo.number});
+    renderJoInvoiceSelect(); refresh(); toast(`Job order ${jo.number} created`);
+  };
+
+  // ---------- print ----------
+  $('#btnPrint').onclick = () => {
+    const cur = mode==='INV' ? inv : (joFor(joInvoiceId) || {number:'JO-draft', custName:''}), old = document.title;
+    document.title = `${cur.number} - ${cur.custName || 'client'}`;
+    try{ window.print(); }catch(e){ toast('Printing is blocked here — open the hosted app to print'); }
+    setTimeout(() => document.title = old, 500);
+  };
+
+  // ---------- records ----------
+  const openModal = id => $(id).classList.add('open');
+  $$('.modal').forEach(m => m.addEventListener('click', e => { if(e.target===m || e.target.hasAttribute('data-close')) m.classList.remove('open'); }));
+  $('#btnRecords').onclick = () => { renderRecords(); openModal('#mRecords'); };
+  $('#recSearch').oninput = renderRecords; $('#recFilter').onchange = renderRecords;
+  function renderRecords(){
+    const q = $('#recSearch').value.toLowerCase(), fc = $('#recFilter').value;
+    const list = invoices().filter(r => (!fc || r.companyId===fc) && (!q || (r.number+' '+r.custName+' '+(r.orderNo||'')+' '+(joFor(r.id)?.number||'')).toLowerCase().includes(q)));
+    $('#recList').innerHTML = list.length ? list.map(r => { const jo = joFor(r.id); return `<div class="rec">
+        <div><div class="no">${esc(r.number)}</div>${r.orderNo ? `<span class="tag ord">${esc(r.orderNo)}</span> ` : ''}${jo ? `<span class="tag">${esc(jo.number)}</span>` : '<span class="muted" style="font-size:12px">No job order</span>'}</div>
+        <div>${esc(r.custName)}<div class="muted" style="font-size:12px">${esc(companyOf(r.companyId).name)}</div></div>
+        <div>${fmtShort(r.date)}</div>
+        <div><b>Php ${money(totals(r).gross)}</b><div class="muted" style="font-size:12px">${esc(r.payStatus)}</div></div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="btn sm" data-open="${esc(r.id)}">Invoice</button>
+          ${jo ? `<button class="btn sm" data-openjo="${esc(r.id)}">Job order</button>` : ''}
+          <button class="btn sm" data-dupl="${esc(r.id)}">Copy</button>
+          <button class="btn sm danger" data-rm="${esc(r.id)}">Delete</button>
+        </div></div>`; }).join('')
+      : '<p class="muted">No invoices yet. Fill in the form and press <b>Create invoice</b>.</p>';
+    renderStoreInfo();
+  }
+  $('#recList').addEventListener('click', async e => {
+    const b = e.target, close = () => $('#mRecords').classList.remove('open'); let id;
+    if((id = b.dataset.open)){ inv = clone(records.find(r => r.id===id)); dirty=false; setMode('INV'); fillForm(); close(); }
+    else if((id = b.dataset.openjo)){ joInvoiceId = id; setMode('JO'); close(); }
+    else if((id = b.dataset.dupl)){ const d = today();
+      inv = Object.assign(clone(records.find(r => r.id===id)), {id:uid(), number:nextInvoiceNumber(d), date:d, payStatus:'Unpaid', paid:0, deadline:'', savedAt:null, orderId:'', orderNo:''});
+      dirty = true; setMode('INV'); fillForm(); close(); toast('Copied — press Create invoice to save it'); }
+    else if((id = b.dataset.rm)){
+      if(b.dataset.sure){ records = records.filter(r => r.id!==id && r.invoiceId!==id); await saveRecords();
+        if(inv.id===id){ inv = blankInvoice(inv.companyId); fillForm(); }
+        renderRecords(); if(mode==='JO') renderJoInvoiceSelect(); refresh(); toast('Invoice and its job order deleted'); }
+      else { b.dataset.sure = 1; b.textContent = 'Confirm?'; setTimeout(() => { if(b.isConnected){ delete b.dataset.sure; b.textContent = 'Delete'; } }, 3000); }
+    }
+  });
+  // ---------- file saving (download, or share sheet on iPhone home-screen app) ----------
+  async function saveFile(blob, name){
+    const standaloneIOS = /iP(hone|ad|od)/.test(navigator.userAgent) && (navigator.standalone || matchMedia('(display-mode: standalone)').matches);
+    if(standaloneIOS && navigator.canShare){
+      const file = new File([blob], name, {type: blob.type});
+      if(navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file], title:name}); return true; }catch(e){ if(e.name==='AbortError') return false; } }
+    }
+    try{ const url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000); return true;
+    }catch(e){ toast('Download blocked here — open the installed app'); return false; }
+  }
+  let lastBackupAt = LS.get('iom_lastBackup', null);
+  const markBackup = () => { lastBackupAt = new Date().toISOString(); LS.set('iom_lastBackup', lastBackupAt); renderStoreInfo(); };
+
+  // ---------- CSV: one row per item, invoice details repeated ----------
+  function buildCSV(){
+    const cell = v => { const s = String(v ?? ''); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; };
+    const head = ['Invoice No','JO No','Company','Invoice Date','Client Name','Contact Number','Address','Payment Status',
+      'Item #','Item Name','Dimensions','Details','Qty','Unit Price','Line Total','Has Photo',
+      'Items Total','Delivery Fee','Installation Fee','Discount','VAT','Downpayment','Grand Total',
+      'JO Date','Deadline','JO Note','Saved At'];
+    const rows = [head];
+    invoices().slice().sort((a,b) => String(a.number).localeCompare(String(b.number))).forEach(r => {
+      const t = totals(r), jo = joFor(r.id), items = r.items.length ? r.items : [blankItem()];
+      items.forEach((i,n) => rows.push([r.number, jo?.number || '', companyOf(r.companyId).name, r.date, r.custName, r.custPhone, r.custAddress, r.payStatus,
+        n+1, i.name, i.dims, lines(i.details).join(' | '), i.qty, Number(i.price)||0, (Number(i.qty)||0)*(Number(i.price)||0), i.photo ? 'Yes' : 'No',
+        t.sub.toFixed(2), t.del.toFixed(2), t.ins.toFixed(2), t.disc.toFixed(2), t.vat.toFixed(2), t.paid.toFixed(2), t.grand.toFixed(2),
+        jo?.joDate || '', r.deadline || '', lines(r.joNote).join(' | '), r.savedAt || '']));
+    });
+    return '﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n');   // BOM so Excel reads ₱/ñ correctly
+  }
+  $('#btnCsv').onclick = async () => {
+    if(!invoices().length){ toast('No invoices to save yet'); return; }
+    if(await saveFile(new Blob([buildCSV()], {type:'text/csv;charset=utf-8'}), `orders-${today()}.csv`)){ markBackup(); toast('CSV saved'); }
+  };
+  $('#btnExport').onclick = async () => {
+    const blob = new Blob([JSON.stringify({companies, records, exportedAt:new Date().toISOString()})], {type:'application/json'});
+    if(await saveFile(blob, `orders-backup-${today()}.json`)){ markBackup(); toast('Backup saved'); }
+  };
+  function renderStoreInfo(){
+    const n = invoices().length;
+    $('#storeInfo').textContent = `${n} invoice${n===1?'':'s'} stored on this device · ` +
+      (lastBackupAt ? `last backup ${new Date(lastBackupAt).toLocaleString('en-PH',{dateStyle:'medium',timeStyle:'short'})}` : 'no backup saved yet');
+  }
+  $('#btnClearAll').onclick = async e => {
+    const b = e.currentTarget;
+    if(!records.length){ toast('Nothing to clear'); return; }
+    if(!b.dataset.sure){
+      b.dataset.sure = 1; b.textContent = lastBackupAt ? 'Tap again to delete everything' : 'No backup yet! Tap again to delete anyway';
+      setTimeout(() => { if(b.isConnected){ delete b.dataset.sure; b.textContent = 'Clear all records…'; } }, 4000); return;
+    }
+    records.forEach(r => noteNumber(r.type, null, r.number));   // remember where numbering was, so it continues after clearing
+    records = []; await saveRecords(); inv = blankInvoice(inv.companyId); dirty = false;
+    delete b.dataset.sure; b.textContent = 'Clear all records…';
+    fillForm(); setMode('INV'); renderRecords(); toast('All records cleared (company settings kept)');
+  };
+  $('#importFile').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if(!f) return;
+    if(f.size > 200*1024*1024){ toast('That file is too large to be a backup'); return; }
+    try{ const d = JSON.parse(await f.text());
+      if(!d || typeof d !== 'object' || !Array.isArray(d.records)) throw new Error('not a backup');
+      const cos = Array.isArray(d.companies) ? d.companies.map(cleanCompany).filter(Boolean) : [];
+      if(cos.length) companies = cos;
+      const ids = new Set(records.map(r => r.id));
+      let added = 0, skipped = 0;
+      d.records.forEach(raw => { const r = cleanRecord(raw); if(!r){ skipped++; return; } if(!ids.has(r.id)){ records.push(r); ids.add(r.id); added++; } });
+      await saveCompanies(); await saveRecords();
+      renderCompanySelects(); renderRecords(); if(mode==='JO') renderJoInvoiceSelect(); refresh(); toast(`Backup imported: ${added} added` + (skipped ? `, ${skipped} invalid entries ignored` : ''));
+    }catch(err){ toast('That file is not a valid backup'); }
+  };
+
+  // ---------- settings ----------
+  let editCo;
+  function loadSettings(id){
+    editCo = companyOf(id); $('#setCo').value = editCo.id;
+    $$('[data-s]').forEach(el => el.value = editCo[el.dataset.s] || (el.type==='color' ? '#334155' : ''));
+    [['#prevLogo','logo'],['#prevJoLogo','joLogo']].forEach(([s,k]) => { $(s).src = editCo[k] || ''; $(s).style.display = editCo[k] ? 'block' : 'none'; });
+  }
+  function companiesChanged(){ saveCompanies(); const cur = $('#companySel').value; renderCompanySelects(); $('#companySel').value = cur; $('#setCo').value = editCo.id; if(mode==='JO') renderJoInvoiceSelect(); refresh(); }
+  $('#btnSettings').onclick = () => { loadSettings($('#companySel').value); openModal('#mSettings'); };
+  $('#setCo').onchange = e => loadSettings(e.target.value);
+  $$('[data-s]').forEach(el => el.addEventListener('input', () => { editCo[el.dataset.s] = el.value; companiesChanged(); }));
+  $$('[data-logo]').forEach(el => el.onchange = async e => {
+    const f = e.target.files[0]; e.target.value=''; if(!f) return;
+    try{ editCo[el.dataset.logo] = await readImage(f, 700, 'image/png'); loadSettings(editCo.id); companiesChanged(); }catch(err){ toast("Couldn't read that image"); }
+  });
+  $$('[data-logoclear]').forEach(b => b.onclick = () => { editCo[b.dataset.logoclear] = ''; loadSettings(editCo.id); companiesChanged(); });
+  $('#btnAddCo').onclick = () => {
+    const c = {id:uid(), name:'NEW COMPANY', brand:'new company', tagline:'', address:'', social:'', email:'', viber:'', color:'#334155', payIntro:PAY_INTRO, payment:'', terms:TERMS, logo:'', joLogo:''};
+    companies.push(c); companiesChanged(); loadSettings(c.id); $('[data-s=name]').select();
+  };
+
+  let tt; function toast(m){ const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2400); }
+  window.addEventListener('beforeunload', e => { if(dirty){ e.preventDefault(); e.returnValue=''; } });
+
+  // ---------- init ----------
+  saveCompanies(); if(records.length) saveRecords();
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}   // ask the phone not to auto-clear data
+  if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+    try{ navigator.serviceWorker.register('sw.js').catch(() => {}); }catch(e){}
+  }
+  renderCompanySelects();
+  inv = blankInvoice(companies[0].id);
+  fillForm(); setMode('INV');
+  const ho = await DB.get('handoff');
+  if(ho && ho.orderId && Date.now() - (ho.at||0) < 30*60*1000){
+    await DB.set('handoff', null);
+    const found = invoices().find(r => r.orderId===ho.orderId) || (ho.invoiceNo ? invoices().find(r => r.number===ho.invoiceNo) : null);
+    if(found){
+      if(!found.orderId){ found.orderId = str(ho.orderId,64); found.orderNo = str(ho.orderNo,40); await saveRecords(); }
+      if(ho.want==='JO'){ joInvoiceId = found.id; setMode('JO'); }
+      else { inv = clone(found); dirty = false; fillForm(); }
+    } else {
+      const coId = ho.company==='Cebu Mirrors' ? 'cebumirrors' : ho.company==='Mirrora' ? 'mirrora' : inv.companyId;
+      inv = blankInvoice(companyOf(coId).id);
+      Object.assign(inv, { orderId: str(ho.orderId,64), orderNo: str(ho.orderNo,40), custName: str(ho.name), custPhone: str(ho.contact), custAddress: str(ho.address) });
+      if(ho.invoiceNo && !invoices().some(r => r.number===ho.invoiceNo)) inv.number = str(ho.invoiceNo,40);
+      const its = (Array.isArray(ho.items) ? ho.items : []).slice(0,200).map(i => ({ name: str(i.name), dims: str(i.dims), details: str(i.details), qty: num(i.qty)||1, price: num(i.price), photo: safeImg(i.photo) }));
+      if(its.length) inv.items = its;
+      dirty = true; fillForm();
+      toast(ho.want==='JO' ? `Filled in from ${ho.orderNo || 'the order'} — press Create invoice, then Create job order` : `Filled in from ${ho.orderNo || 'the order'} — check it, then press Create invoice`);
+    }
+  }
+})();
+</script>
+</body>
+</html>
